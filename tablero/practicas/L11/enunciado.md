@@ -56,6 +56,19 @@ docker compose -p l11 up -d        # Odoo tarda ~1 min la primera vez
 
 Si Odoo aún no tiene ninguna orden confirmada (o lo dejas apagado), el MES trabaja con una **orden de demostración** `MO/DEMO` (objetivo 20) para que la parte baja de la pirámide se pueda probar igual. En cuanto creas la orden en Odoo, el MES la toma: fuerza el relevo con `GET /api/nueva_orden` o espera a que termine la demo.
 
+## Ver la fabricación en el tablero
+
+El MES no solo cuenta: también **muestra el avance** en las salidas del ESP32 PLC, que se ven en el 3D:
+
+| Salida | Registro | Qué indica |
+|---|---|---|
+| REL-A | 4 | línea en marcha (se apaga al terminar la orden) |
+| REL-B | 5 | la orden va al menos por **1/3** |
+| Q0.2 | 6 | la orden va al menos por **2/3** |
+| Q0.3 | 7 | **cinta**: gira mientras la orden está en curso |
+
+Para verlo con carga real, cablea (opcional, no se evalúa): el **foco de 24 V** entre `RELA` de la bornera y `0V`, y el **motor** entre `Q3` y `GND` del ESP32 PLC. Con una orden en curso el foco se enciende y el motor gira; las salidas REL-B y Q0.2 se encienden al pasar 1/3 y 2/3; al terminar, foco y motor se apagan y las lámparas de avance quedan encendidas. Cada escritura de avance suma una transacción al contador del registro 3; el MES la descuenta para no contarla como pieza.
+
 ## Qué comprueba «Comprobar mi solución»
 
 1. **Nivel 1** · el PLC de producción responde en `192.168.1.10:502`.

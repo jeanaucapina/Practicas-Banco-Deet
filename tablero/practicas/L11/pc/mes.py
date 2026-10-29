@@ -36,6 +36,10 @@ ODOO_PASS = os.environ.get("MES_ODOO_PASS", "admin")
 
 REG_ACTUADOR = 4          # escribir 1 = linea en marcha
 REG_SALIENTES = 3         # contador de transacciones servidas = piezas producidas
+# Salidas de "avance" para VERLO en el tablero (L11): 4 = linea en marcha (foco en REL-A),
+# 5 = lampara de >= 1/3, 6 = lampara de >= 2/3, 7 = cinta (motor en Q0.3): gira mientras la
+# orden esta en curso. Solo se escribe cuando cambian: cada escritura al PLC suma 1 a [3].
+REG_AVANCE1, REG_AVANCE2, REG_CINTA = 5, 6, 7
 PERIODO_S = 1.0           # el MES sondea el PLC cada segundo (como un SCADA lento)
 
 estado = {
@@ -49,6 +53,16 @@ estado = {
     "historico": [],       # (ts, producidas) para la grafica del tablero
 }
 cerrojo = threading.Lock()
+salidas = {}              # ultimo valor escrito en 5..7 (solo se escribe si cambia)
+extras = [0]              # escrituras de avance hechas: se restan del contador de piezas
+
+
+def poner(cli, reg, valor):
+    """Escribe una salida de avance solo si cambia; cuenta la escritura para no sumarla como pieza."""
+    if salidas.get(reg) != valor:
+        cli.write_register(reg, valor)
+        salidas[reg] = valor
+        extras[0] += 1
 
 
 # ---- Odoo (nivel 4): pedir ordenes de fabricacion por JSON-RPC ------------------------
@@ -107,6 +121,7 @@ def lazo_mes():
                     estado["orden"] = tomar_orden()
                     estado["piezas_base"] = None
                     estado["arranque_ts"] = time.time()
+                    salidas.clear()
                 o = estado["orden"]
             en_curso = o["estado"] == "en curso"
             # Arrancar la linea (actuador 4 = 1) SOLO con una orden en curso. Con la orden
@@ -114,6 +129,10 @@ def lazo_mes():
             # el registro 4 a otras practicas (la L9 lo usa como rele).
             if en_curso:
                 cli.write_register(REG_ACTUADOR, 1)
+                poner(cli, REG_CINTA, 1)                  # la cinta gira mientras se fabrica
+                if estado["piezas_base"] is None:         # orden nueva: lamparas de avance apagadas
+                    poner(cli, REG_AVANCE1, 0)
+                    poner(cli, REG_AVANCE2, 0)
             rr = cli.read_holding_registers(REG_SALIENTES, count=1)
             estado["plc_conectado"] = not rr.isError()
             if rr.isError() or not en_curso:
@@ -122,8 +141,11 @@ def lazo_mes():
             with cerrojo:
                 if estado["piezas_base"] is None:
                     estado["piezas_base"] = salientes
-                producidas = max(0, salientes - estado["piezas_base"])
+                    extras[0] = 0                          # lo anterior ya esta dentro de la base
+                producidas = max(0, salientes - estado["piezas_base"] - extras[0])
                 o["producidas"] = min(producidas, o["objetivo"])
+                poner(cli, REG_AVANCE1, int(o["producidas"] * 3 >= o["objetivo"]))
+                poner(cli, REG_AVANCE2, int(o["producidas"] * 3 >= 2 * o["objetivo"]))
                 # OEE = disponibilidad x rendimiento x calidad. En el banco: disponibilidad = la
                 # linea respondio en este ciclo; rendimiento = producidas frente a las que
                 # tocaban a 1 pza/s; calidad = 1 (el banco no tiene rechazos: es el reto).
@@ -137,6 +159,9 @@ def lazo_mes():
                     o["estado"] = "terminada"
                     o["fin_ts"] = time.time()
                     cli.write_register(REG_ACTUADOR, 0)    # parar la linea (una sola vez)
+                    poner(cli, REG_AVANCE1, 1)
+                    poner(cli, REG_AVANCE2, 1)
+                    poner(cli, REG_CINTA, 0)               # la cinta se detiene
         except Exception as e:
             estado["plc_conectado"] = False
             estado["ult_error"] = str(e)
