@@ -62,6 +62,7 @@ function Docker-Listo {
 }
 
 function Gafas {
+    if (-not (Get-Command adb -ErrorAction SilentlyContinue)) { return $false }
     $l = (adb devices 2>$null) -match "`tdevice$"
     return [bool]$l
 }
