@@ -1,0 +1,44 @@
+{
+  "id": "LIBRE",
+  "titulo": "Laboratorio libre: arma y prueba tu propia topología",
+  "equipo": "t1.controllino",
+  "exige_programa": false,
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "reiniciar": false,
+  "montaje": {
+    "limpiar": true,
+    "cables": [],
+    "ordenes": [],
+    "energia": [
+      [
+        "t1.controllino",
+        true
+      ],
+      [
+        "t1.esp32plc",
+        true
+      ],
+      [
+        "t2.controllino",
+        true
+      ],
+      [
+        "t2.esp32plc",
+        true
+      ],
+      [
+        "t1.switch",
+        true
+      ],
+      [
+        "t2.switch",
+        true
+      ]
+    ]
+  },
+  "marcar": [],
+  "verificacion": []
+}

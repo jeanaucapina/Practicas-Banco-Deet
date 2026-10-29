@@ -1,0 +1,10 @@
+# Pasarela del tablero dentro de un contenedor (Windows / Docker Desktop).
+#
+# En Linux la pasarela corre en el propio PC (tablero.sh). En Docker Desktop
+# las redes tab_* viven dentro de la VM de Docker, asi que la pasarela tiene
+# que estar ahi: red del anfitrion (= la VM), el socket de Docker para
+# enchufar cables con `docker network connect`, e iproute2 para `ip`.
+FROM docker:27-cli
+RUN apk add --no-cache python3 iproute2
+WORKDIR /tablero
+CMD ["python3", "-u", "pasarela/pasarela.py"]

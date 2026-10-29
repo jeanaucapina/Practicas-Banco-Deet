@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal del PC
+Comment=ip, ping, arp, nc, nmap, mbpoll, python3, tshark, mosquitto_sub...
+Exec=xterm -fa "DejaVu Sans Mono" -fs 12 -bg "#101418" -fg "#e8e8e8" -geometry 120x34 -T "Terminal del PC (192.168.1.100)"
+Icon=utilities-terminal

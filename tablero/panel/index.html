@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel del laboratorio</title>
+<style>
+  :root {
+    --fondo: #f3f4f1; --tarjeta: #fdfdfb; --borde: #dcdfd8; --texto: #1c2321; --suave: #5b6560;
+    --acento: #1f7f74; --acento-f: #d6efe9; --naranja: #c2571a; --naranja-f: #fbe6d4;
+    --rojo: #b3261e; --rojo-f: #f9dedc; --led-off: #c9cec8; --led-on: #f2b705; --verde: #2e9d4f;
+    --azul: #2f62b0; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #121614; --tarjeta: #1b201e; --borde: #2c3330; --texto: #e6ebe8; --suave: #9aa6a0;
+      --acento: #5fd0c2; --acento-f: #183330; --naranja: #f2994a; --naranja-f: #3a2818;
+      --rojo: #f2867c; --rojo-f: #3b1d1b; --led-off: #39403d; --led-on: #ffd43b; --verde: #5ad17a; --azul: #7fa8f0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto);
+         font: 15px/1.45 system-ui, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--tarjeta); border-bottom: 1px solid var(--borde);
+           padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; }
+  header h1 span { color: var(--suave); font-weight: 500; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--suave); }
+  .punto { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); flex: none; }
+  .punto.ok { background: var(--verde); } .punto.mal { background: var(--rojo); } .punto.medio { background: var(--naranja); }
+  main { padding: 18px 20px 40px; display: grid; gap: 16px; grid-template-columns: repeat(12, 1fr); max-width: 1500px; margin: 0 auto; }
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+  .tarjeta h2 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .tarjeta h2 .der { margin-left: auto; font-weight: 400; font-size: 13px; color: var(--suave); }
+  .c6 { grid-column: span 6; } .c4 { grid-column: span 4; } .c8 { grid-column: span 8; } .c12 { grid-column: span 12; }
+  @media (max-width: 1100px) { .c4, .c6, .c8 { grid-column: span 12; } }
+  .equipo { border-top: 1px solid var(--borde); padding-top: 10px; margin-top: 10px; }
+  .equipo:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+  .equipo h3 { font-size: 14px; margin: 0 0 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pill { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--acento-f); color: var(--acento); }
+  .pill.naranja { background: var(--naranja-f); color: var(--naranja); }
+  .pill.gris { background: var(--fondo); color: var(--suave); border: 1px solid var(--borde); }
+  .fila { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+  .grupo { display: flex; flex-direction: column; gap: 4px; }
+  .etq { font-size: 12px; color: var(--suave); }
+  .leds { display: flex; flex-wrap: wrap; gap: 3px; max-width: 330px; }
+  .led { width: 22px; height: 22px; border-radius: 5px; background: var(--led-off); font: 9px/22px var(--mono);
+         text-align: center; color: var(--suave); }
+  .led.on { background: var(--led-on); color: #3a2a00; box-shadow: 0 0 8px var(--led-on); }
+  .led.in.on { background: var(--azul); color: #fff; box-shadow: none; }
+  .matriz { display: grid; grid-template-columns: repeat(3, 26px); gap: 5px; padding: 6px; background: var(--fondo); border-radius: 8px; }
+  .matriz .led { width: 26px; height: 26px; border-radius: 50%; line-height: 26px; }
+  button, select, input[type=file] { font: inherit; font-size: 13px; }
+  button { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 8px;
+           padding: 6px 11px; cursor: pointer; }
+  button:hover { border-color: var(--acento); }
+  button.prim { background: var(--acento); color: var(--tarjeta); border-color: var(--acento); font-weight: 600; }
+  button.pulsado, button.activo { background: var(--azul); color: #fff; border-color: var(--azul); }
+  button.peq { padding: 3px 8px; font-size: 12px; }
+  select { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 8px; padding: 6px; }
+  input[type=range] { width: 160px; accent-color: var(--acento); }
+  .tabla { width: 100%; border-collapse: collapse; font: 12.5px/1.4 var(--mono); }
+  .tabla td, .tabla th { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--borde); white-space: nowrap; }
+  .tabla th { color: var(--suave); font-weight: 600; position: sticky; top: 0; background: var(--tarjeta); }
+  .tabla td.res { white-space: normal; }
+  .pet { color: var(--azul); } .resp { color: var(--verde); } .mal { color: var(--rojo); } .info { color: var(--suave); }
+  .scroll { max-height: 340px; overflow: auto; }
+  pre { font: 12.5px/1.45 var(--mono); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px;
+        padding: 10px; margin: 8px 0 0; max-height: 260px; overflow: auto; white-space: pre-wrap; }
+  .num { font: 600 22px/1.1 var(--mono); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+  .kpi { background: var(--fondo); border-radius: 8px; padding: 8px 10px; }
+  .barra { height: 10px; background: var(--fondo); border-radius: 5px; position: relative; overflow: hidden; margin-top: 6px; }
+  .barra i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--naranja); }
+  .barra b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--rojo); }
+  .filtros { display: flex; gap: 6px; flex-wrap: wrap; }
+  .vacio { color: var(--suave); font-size: 13px; padding: 8px 0; }
+  a { color: var(--acento); }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--fondo); padding: 1px 5px; border-radius: 4px; }
+  dialog { width: min(900px, 94vw); max-height: 86vh; border: 1px solid var(--borde); border-radius: 12px;
+           background: var(--tarjeta); color: var(--texto); padding: 0; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog .cab { position: sticky; top: 0; background: var(--tarjeta); padding: 12px 18px; border-bottom: 1px solid var(--borde);
+                display: flex; align-items: center; }
+  dialog .cuerpo { padding: 4px 22px 20px; overflow: auto; }
+  dialog table { border-collapse: collapse; } dialog td, dialog th { border: 1px solid var(--borde); padding: 4px 8px; }
+  .eventos { font: 12px/1.5 var(--mono); color: var(--suave); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Laboratorio de Informática Industrial <span>· Tablero DEET</span></h1>
+  <span class="chip"><span class="punto" id="h-pasarela"></span>Pasarela</span>
+  <span class="chip"><span class="punto" id="h-gafas"></span><span id="h-gafas-t">Gafas</span></span>
+  <span class="chip"><span class="punto" id="h-equipos"></span><span id="h-equipos-t">Equipos</span></span>
+  <span class="chip"><span class="punto" id="h-broker"></span>Broker MQTT</span>
+  <span class="chip"><span class="punto" id="h-s7"></span>S7-1200</span>
+  <span class="chip"><span class="punto" id="h-openplc"></span><span id="h-openplc-t">OpenPLC</span></span>
+</header>
+
+<main>
+  <section class="tarjeta c6" id="tab1"></section>
+  <section class="tarjeta c6" id="tab2"></section>
+
+  <section class="tarjeta c8">
+    <h2>Captura en vivo <span class="der" id="cap-n"></span></h2>
+    <div class="filtros" id="filtros"></div>
+    <div class="scroll" style="margin-top:8px">
+      <table class="tabla">
+        <thead><tr><th>n.º</th><th>hora</th><th>origen → destino</th><th>protocolo</th><th>info</th></tr></thead>
+        <tbody id="cap"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tarjeta c4">
+    <h2>MQTT <span class="der">broker 192.168.1.50:1883 · tema #</span></h2>
+    <div class="scroll" id="mqtt"></div>
+  </section>
+
+  <section class="tarjeta c6" id="s7">
+    <h2>S7-1200 simulado <span class="der">127.0.0.1:102 · rack 0, slot 1</span></h2>
+    <div id="s7-cuerpo" class="vacio">sin datos</div>
+  </section>
+
+  <section class="tarjeta c6">
+    <h2>Escalera y bloques · OpenPLC <span class="der">sin instalar nada</span></h2>
+    <div id="openplc"></div>
+  </section>
+
+  <section class="tarjeta c8">
+    <h2>Programar un equipo</h2>
+    <div class="fila" style="align-items:center">
+      <select id="p-equipo">
+        <option value="t1.controllino">Tablero 1 · Controllino (.ino)</option>
+        <option value="t2.controllino">Tablero 2 · Controllino (.ino)</option>
+        <option value="t1.esp32plc">Tablero 1 · ESP32 PLC (.ino)</option>
+        <option value="t2.esp32plc">Tablero 2 · ESP32 PLC (.ino)</option>
+        <option value="t1.openplc">Tablero 1 · OpenPLC (.st)</option>
+        <option value="t2.openplc">Tablero 2 · OpenPLC (.st)</option>
+      </select>
+      <input type="file" id="p-archivo" accept=".ino,.st">
+      <button class="prim" id="p-subir">Compilar y subir</button>
+      <button id="p-fabrica">Volver a fábrica</button>
+    </div>
+    <div class="fila" style="align-items:center;margin-top:10px">
+      <strong style="font-size:14px">o un ejemplo</strong>
+      <select id="p-ejemplo"><option value="">— elige un ejemplo —</option></select>
+      <button class="prim" id="p-subir-ej">Subir el ejemplo a este equipo</button>
+    </div>
+    <div class="etq" id="p-ejemplo-info" style="margin-top:4px"></div>
+    <pre id="p-salida" hidden></pre>
+    <div class="fila" style="align-items:center;margin-top:12px">
+      <strong style="font-size:14px">Monitor serie</strong>
+      <span class="etq" id="serie-equipo"></span>
+      <label class="etq"><input type="checkbox" id="serie-vivo" checked> en vivo</label>
+    </div>
+    <pre id="serie">elige un Controllino o ESP32 arriba</pre>
+  </section>
+
+  <section class="tarjeta c4">
+    <h2>Guías</h2>
+    <div class="grupo" style="gap:8px">
+      <button data-guia="arduino">Programar en Arduino (.ino)</button>
+      <button data-guia="openplc">Escalera y bloques con OpenPLC</button>
+      <button data-guia="practicas">Prácticas del tablero</button>
+      <button data-guia="tablero">Tablero: arquitectura y mapas Modbus</button>
+    </div>
+    <h2 style="margin-top:16px">Desde PowerShell</h2>
+    <div class="etq" style="line-height:1.9">
+      <code>.\lab.ps1 arrancar</code> · <code>.\lab.ps1 parar</code><br>
+      <code>.\lab.ps1 openplc</code> · <code>.\lab.ps1 openplc parar</code><br>
+      <code>.\lab.ps1 gafas</code> (tras cambiar de red, gafas por USB)
+    </div>
+    <h2 style="margin-top:16px">Eventos de la pasarela</h2>
+    <div class="eventos" id="eventos"></div>
+  </section>
+</main>
+
+<dialog id="dlg"><div class="cab"><strong id="dlg-t"></strong><button style="margin-left:auto" onclick="dlg.close()">Cerrar</button></div>
+<div class="cuerpo" id="dlg-c"></div></dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const MODOS = {0: "ESCLAVO", 1: "ESPEJO", 2: "SECUENCIA", 3: "MAESTRO 485", 4: "MAESTRO TCP", 9: "PROGRAMA"};
+const MATRIZ = [[0, 6, 12], [1, 7, 13], [2, 8, 14]];
+let ultimo = null, capturas = new Map(), filtro = "", pausa = false;
+
+async function orden(d) {
+  await fetch("/api/orden", {method: "POST", body: JSON.stringify(d)});
+}
+const entrada = (eq, i, v) => orden({t: "orden", equipo: eq, orden: {cmd: "entrada", i, v}});
+
+function leds(arr, pref, clase = "") {
+  return (arr || []).map((v, i) => `<span class="led ${clase} ${v ? "on" : ""}" title="${pref}${i}">${i}</span>`).join("");
+}
+
+// ── Tableros ────────────────────────────────────────────────────────────────
+function montarTablero(n) {
+  const c = `t${n}.controllino`, e = `t${n}.esp32plc`;
+  $("tab" + n).innerHTML = `
+    <h2>Tablero ${n} <span class="der" id="t${n}-cab"></span></h2>
+    <div class="equipo">
+      <h3>Controllino MEGA <span id="t${n}-c-modo"></span><span id="t${n}-c-red"></span></h3>
+      <div class="fila">
+        <div class="grupo"><span class="etq">Matriz 3x3</span><div class="matriz" id="t${n}-c-mat"></div></div>
+        <div class="grupo"><span class="etq">Pulsadores (mantén pulsado)</span>
+          <div class="fila" style="gap:6px">
+            ${[16, 17, 18].map(i => `<button class="peq" data-pulsa="${c}|${i}">I${i}</button>`).join("")}
+          </div>
+          <span class="etq" style="margin-top:6px">Potenciómetro A0: <b id="t${n}-c-a0v">0</b></span>
+          <input type="range" min="0" max="1023" value="0" data-pot="${c}">
+        </div>
+        <div class="grupo"><span class="etq">Modo (como las teclas de la HMI)</span>
+          <div class="fila" style="gap:6px">
+            ${[[0, "Esclavo"], [2, "Secuencia"], [3, "Maestro 485"], [4, "Maestro TCP"]].map(
+              ([m, t]) => `<button class="peq" data-modo="${c}|${m}">${t}</button>`).join("")}
+          </div>
+        </div>
+      </div>
+      <div class="grupo" style="margin-top:8px"><span class="etq">Salidas D0–D23</span><div class="leds" id="t${n}-c-do" style="max-width:none"></div></div>
+    </div>
+    <div class="equipo">
+      <h3>ESP32 PLC 14 <span id="t${n}-e-prog"></span><span id="t${n}-e-red"></span></h3>
+      <div class="fila">
+        <div class="grupo"><span class="etq">Salidas Q0.0–Q0.3 · relé</span><div class="leds" id="t${n}-e-do"></div></div>
+        <div class="grupo"><span class="etq">Entradas I0.1–I0.8 (clic = cambiar)</span>
+          <div class="fila" style="gap:4px" id="t${n}-e-di"></div></div>
+        <div class="grupo"><span class="etq">WiFi</span><button class="peq" data-wifi="${e}" id="t${n}-e-wifi">—</button></div>
+      </div>
+    </div>`;
+}
+
+function pintarTablero(n, eq) {
+  const c = eq[`t${n}.controllino`] || {}, e = eq[`t${n}.esp32plc`] || {};
+  $(`t${n}-cab`).textContent = c.encendido ? "" : "Controllino sin señal";
+  const prog = c.modo === 9;
+  poner(`t${n}-c-modo`, prog ? `<span class="pill naranja">programa ${c.programa || ""}</span>`
+    : `<span class="pill">fábrica · ${MODOS[c.modo] ?? "?"}</span>`);
+  poner(`t${n}-c-red`, c.lan ? `<span class="pill">LAN ${c.ip}</span>` : `<span class="pill gris">sin cable de red</span>`);
+  const d = c.do || [];
+  poner(`t${n}-c-mat`, MATRIZ.flat().map(i => `<span class="led ${d[i] ? "on" : ""}">D${i}</span>`).join(""));
+  poner(`t${n}-c-do`, leds(d, "D"));
+  const di = c.di || [];
+  document.querySelectorAll(`[data-pulsa^="t${n}.controllino|"]`).forEach(b => {
+    b.classList.toggle("pulsado", !!di[+b.dataset.pulsa.split("|")[1]]);
+  });
+  document.querySelectorAll(`[data-modo^="t${n}.controllino|"]`).forEach(b => {
+    b.classList.toggle("activo", +b.dataset.modo.split("|")[1] === c.modo);
+  });
+  const a0 = (c.ai || [])[0] ?? 0;
+  $(`t${n}-c-a0v`).textContent = a0;
+  const pot = document.querySelector(`[data-pot="t${n}.controllino"]`);
+  if (document.activeElement !== pot) pot.value = a0;
+
+  poner(`t${n}-e-prog`, e.programa ? `<span class="pill naranja">programa ${e.programa}</span>` : `<span class="pill">fábrica</span>`);
+  poner(`t${n}-e-red`, (e.lan ? `<span class="pill">LAN</span>` : "") +
+    (e.wifi ? `<span class="pill">WiFi</span>` : "") + (e.broker ? `<span class="pill">MQTT ${e.broker}</span>` : ""));
+  poner(`t${n}-e-do`, leds([...(e.do || []), ...(e.rele || [])], "Q").replace(/>4</, ">R<"));
+  poner(`t${n}-e-di`, (e.di || []).map((v, i) =>
+    `<button class="peq ${v ? "pulsado" : ""}" data-esp="t${n}.esp32plc|${i}|${v ? 0 : 1}">I0.${i + 1}</button>`).join(""));
+  const w = $(`t${n}-e-wifi`);
+  w.textContent = e.wifi ? "Apagar WiFi" : "Encender WiFi";
+  w.dataset.v = e.wifi ? "0" : "1";
+}
+
+document.addEventListener("pointerdown", ev => {
+  const b = ev.target.closest("[data-pulsa]");
+  if (!b) return;
+  const [eq, i] = b.dataset.pulsa.split("|");
+  entrada(eq, +i, 1);
+  const soltar = () => { entrada(eq, +i, 0); window.removeEventListener("pointerup", soltar); };
+  window.addEventListener("pointerup", soltar);
+});
+document.addEventListener("click", ev => {
+  const t = ev.target;
+  if (t.dataset.modo) { const [eq, m] = t.dataset.modo.split("|"); orden({t: "orden", equipo: eq, orden: {cmd: "modo", v: +m}}); }
+  if (t.dataset.esp) { const [eq, i, v] = t.dataset.esp.split("|"); entrada(eq, +i, +v); }
+  if (t.dataset.wifi) orden({t: "wifi", equipo: t.dataset.wifi, v: t.dataset.v === "1"});
+  if (t.dataset.guia) abrirGuia(t.dataset.guia, t.textContent);
+  if (t.dataset.filtro !== undefined) { filtro = t.dataset.filtro; pintarFiltros(); pintarCaptura(); }
+  if (t.id === "cap-pausa") { pausa = !pausa; pintarFiltros(); }
+  if (t.dataset.cargar) cargarSt(t.dataset.cargar);
+  if (t.dataset.openplc) {
+    const [accion, que] = t.dataset.openplc.split("|");
+    t.disabled = true;
+    t.textContent = accion === "start" ? "Encendiendo…" : "Apagando…";
+    fetch(`/api/openplc?accion=${accion}&que=${que}`, {method: "POST"});
+  }
+});
+let tPot = 0;
+document.addEventListener("input", ev => {
+  const t = ev.target;
+  if (!t.dataset.pot) return;
+  const ahora = Date.now();
+  if (ahora - tPot < 80) return;
+  tPot = ahora;
+  orden({t: "orden", equipo: t.dataset.pot, orden: {cmd: "analogica", i: 0, v: +t.value}});
+});
+document.addEventListener("change", ev => {
+  const t = ev.target;
+  if (t.id === "auto-sel") fetch(`/api/auto?destino=${t.value}`, {method: "POST"});
+  if (t.dataset.pot) orden({t: "orden", equipo: t.dataset.pot, orden: {cmd: "analogica", i: 0, v: +t.value}});
+});
+
+// ── Captura ─────────────────────────────────────────────────────────────────
+const FILTROS = [["", "Todo"], ["Modbus TCP", "Modbus TCP"], ["RTU", "RS-485"], ["MQTT", "MQTT"], ["S7comm", "S7comm"], ["TCP", "TCP"]];
+function pintarFiltros() {
+  $("filtros").innerHTML = FILTROS.map(([f, t]) =>
+    `<button class="peq ${filtro === f ? "activo" : ""}" data-filtro="${f}">${t}</button>`).join("") +
+    `<button class="peq ${pausa ? "activo" : ""}" id="cap-pausa" style="margin-left:auto">${pausa ? "Seguir" : "Pausa"}</button>`;
+}
+function pintarCaptura() {
+  const filas = [...capturas.values()].filter(t => !filtro || (t.proto || "").includes(filtro) || (filtro === "RTU" && t.medio?.startsWith("RS-485")))
+    .slice(-150).reverse();
+  $("cap-n").textContent = `${capturas.size} tramas`;
+  $("cap").innerHTML = filas.map(t => `<tr class="${t.tipo || "info"}"><td>${t.n}</td><td>${t.hora}</td>
+    <td>${t.de} → ${t.a}</td><td>${t.proto}</td><td class="res">${esc(t.resumen || "")}</td></tr>`).join("") ||
+    `<tr><td colspan="5" class="vacio">sin tramas todavía: enchufa cables en las gafas</td></tr>`;
+}
+function poner(id, h) {               // solo si cambia: no rehacer botones a mitad de un clic
+  const e = $(id);
+  if (e._h !== h) { e.innerHTML = h; e._h = h; }
+}
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
+
+// ── S7, MQTT, OpenPLC ───────────────────────────────────────────────────────
+function pintarS7(s) {
+  if (!s) { $("s7-cuerpo").innerHTML = `<div class="vacio">El S7 no está corriendo (.\\lab.ps1 arrancar)</div>`; return; }
+  const bits = (b, p, nom) => [...Array(8)].map((_, i) =>
+    `<span class="led ${p === "I" ? "in" : ""} ${(b >> i) & 1 ? "on" : ""}" title="${nom[i] || ""}">${p}${i}</span>`).join("");
+  const pct = Math.max(0, Math.min(100, (s.temperatura - 15) / (75 - 15) * 100));
+  const pc = Math.max(0, Math.min(100, (s.consigna - 15) / (75 - 15) * 100));
+  $("s7-cuerpo").innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="etq">Motor (Q0.0)</div><div class="num">${s.motor ? "MARCHA" : "parado"}</div></div>
+      <div class="kpi"><div class="etq">Alarma</div><div class="num ${s.alarma ? "mal" : ""}">${s.alarma ? "ACTIVA" : "no"}</div></div>
+      <div class="kpi"><div class="etq">Piezas (DB1.DBW2)</div><div class="num">${s.piezas}</div></div>
+      <div class="kpi"><div class="etq">Temperatura (DBW4)</div><div class="num">${s.temperatura.toFixed(1)} °C</div>
+        <div class="barra"><i style="width:${pct}%"></i><b style="left:${pc}%" title="consigna"></b></div>
+        <div class="etq">consigna ${s.consigna} °C (DBD6)</div></div>
+    </div>
+    <div class="fila" style="margin-top:10px">
+      <div class="grupo"><span class="etq">Entradas %IB0 (MARCHA, PARO, sensor, REARME)</span><div class="leds">${bits(s.I, "I", ["MARCHA", "PARO (NC)", "sensor pieza", "REARME"])}</div></div>
+      <div class="grupo"><span class="etq">Salidas %QB0 (motor, verde, roja)</span><div class="leds">${bits(s.Q, "Q", ["motor", "luz verde", "luz roja"])}</div></div>
+      <div class="grupo"><span class="etq">Tiempo en marcha</span><div class="num" style="font-size:16px">${s.t_marcha} s</div></div>
+    </div>
+    <div class="etq" style="margin-top:8px">Lo lees y escribes con un cliente S7 (Node-RED, python-snap7, un SCADA). Mapa completo en <code>tablero/dispositivos/s7.py</code>.</div>`;
+}
+function pintarMqtt(m) {
+  $("mqtt").innerHTML = m.length ? m.slice().reverse().map(x =>
+    `<div style="border-bottom:1px solid var(--borde);padding:4px 0;font:12.5px/1.4 var(--mono)">
+       <span class="etq">${x.hora}</span> <b>${esc(x.tema)}</b><br>${esc(x.carga)}</div>`).join("")
+    : `<div class="vacio">Sin mensajes. Los publica el ESP32 cuando tiene red y broker.</div>`;
+}
+function pintarOpenplc(cont, proys, auto, info) {
+  const editor = cont["tab-editor"]?.estado === "running";
+  const rt = n => cont[`tab${n}-openplc`]?.estado === "running";
+  const hay = n => rt(1) || rt(2);
+  const cab = `<div class="fila" style="align-items:center">
+      ${editor ? `<a href="http://localhost:6080/vnc.html?autoconnect=1&resize=remote&reconnect=1" target="_blank" rel="noopener"><button class="prim">Abrir el editor gráfico ↗</button></a>`
+               : `<button class="prim" data-openplc="start|editor">Encender el editor</button>`}
+      ${[1, 2].map(n => `<span class="pill ${rt(n) ? "" : "gris"}">CPU tablero ${n}: ${rt(n) ? "RUN" : "parada"}</span>
+        ${rt(n) ? `<a class="etq" href="http://localhost:808${n}" target="_blank" rel="noopener">web ↗</a>` : ""}`).join(" ")}
+      ${hay() ? `<button class="peq" data-openplc="stop|cpus" title="Para los tutoriales: la CPU deja de mandar en el Controllino">Apagar CPUs</button>`
+              : `<button class="peq" data-openplc="start|cpus" title="Mientras corren, mandan en las salidas del Controllino">Encender CPUs</button>`}
+    </div>
+    ${editor ? "" : `<div class="etq" style="margin-top:6px">El editor tarda unos segundos en estar listo tras encenderlo.</div>`}`;
+  const opt = (v, t) => `<option value="${v}" ${auto === v ? "selected" : ""}>${t}</option>`;
+  const resultado = info ? (info.error ? `<span class="mal">${esc(info.error)}</span>` :
+    `${info.hora} · <b>${esc(info.programa)}</b>: ` + info.resultados.map(r =>
+      `<span class="${r.ok ? "" : "mal"}">${r.equipo.slice(0, 2).toUpperCase()} ${r.ok ? "cargado ✓" : "ERROR"}</span>`).join(" · ")) : "";
+  const autoHtml = `<div class="fila" style="align-items:center;margin-top:10px;padding:8px 10px;background:var(--fondo);border-radius:8px">
+      <strong style="font-size:14px">Al pulsar la flecha naranja del editor, cargar en:</strong>
+      <select id="auto-sel">${opt("", "ninguna (yo elijo)")}${opt("t1", "Controllino 1")}${opt("t2", "Controllino 2")}${opt("ambas", "los dos")}</select>
+      <span class="etq">${resultado}</span></div>`;
+  const lista = (proys || []).length ? `<table class="tabla" style="margin-top:10px">
+      <thead><tr><th>programa generado</th><th>cuándo</th><th></th></tr></thead><tbody>
+      ${proys.map(p => `<tr><td>${esc(p.nombre)}</td><td>${p.hora}</td><td style="text-align:right">
+        ${[1, 2].map(n => `<button class="peq" data-cargar="${esc(p.archivo)}|t${n}.openplc" ${rt(n) ? "" : "disabled"}>Cargar en T${n}</button>`).join(" ")}
+      </td></tr>`).join("")}</tbody></table>`
+    : `<div class="vacio">Aún no hay programas generados.</div>`;
+  poner("openplc", cab + autoHtml + lista + `<div class="etq" style="margin-top:10px">En el editor: dibuja la escalera, guarda (Ctrl+S) y pulsa el
+    botón naranja <b>Generate program for OpenPLC Runtime</b>; el programa aparece aquí. Sus E/S son el Controllino del tablero
+    (cable al switch y HMI en ESCLAVO). Mientras las CPUs corren mandan en las salidas: para los tutoriales, pulsa <b>Apagar CPUs</b>.</div>
+    <pre id="cargar-salida" hidden></pre>`);
+}
+
+// ── Bucle ───────────────────────────────────────────────────────────────────
+async function refrescar() {
+  try {
+    const r = await (await fetch("/api/estado")).json();
+    const p = r.pasarela, cont = r.contenedores || {};
+    $("h-pasarela").className = "punto " + (r.pasarela_ok ? "ok" : "mal");
+    const ng = p?.gafas ?? 0;
+    $("h-gafas").className = "punto " + (ng ? "ok" : "");
+    $("h-gafas-t").textContent = ng ? `Gafas (${ng})` : "Gafas sin conectar";
+    const eqs = ["tab1-controllino", "tab2-controllino", "tab1-esp32plc", "tab2-esp32plc"];
+    const vivos = eqs.filter(n => cont[n]?.estado === "running").length;
+    $("h-equipos").className = "punto " + (vivos === 4 ? "ok" : vivos ? "medio" : "mal");
+    $("h-equipos-t").textContent = `Equipos ${vivos}/4`;
+    $("h-broker").className = "punto " + (cont["tab-broker"]?.estado === "running" ? "ok" : "mal");
+    $("h-s7").className = "punto " + (r.s7?.vivo ? "ok" : "mal");
+    const op = ["tab1-openplc", "tab2-openplc"].filter(n => cont[n]?.estado === "running").length;
+    $("h-openplc").className = "punto " + (op ? "ok" : "");
+    $("h-openplc-t").textContent = op ? `OpenPLC (${op})` : "OpenPLC parado";
+    if (p) {
+      pintarTablero(1, p.equipos || {});
+      pintarTablero(2, p.equipos || {});
+      if (!pausa) {
+        for (const t of p.tramas || []) capturas.set(t.n, t);
+        while (capturas.size > 400) capturas.delete(capturas.keys().next().value);
+        pintarCaptura();
+      }
+      $("eventos").innerHTML = (p.eventos || []).slice().reverse().map(esc).join("<br>");
+    }
+    pintarEjemplos(r.ejemplos);
+    pintarS7(r.s7);
+    pintarMqtt(r.mqtt || []);
+    pintarOpenplc(cont, r.proyectos, r.auto, r.auto_info);
+  } catch (e) {
+    $("h-pasarela").className = "punto mal";
+  }
+}
+
+// ── Programar y monitor serie ───────────────────────────────────────────────
+$("p-subir").onclick = async () => {
+  const f = $("p-archivo").files[0], eq = $("p-equipo").value, out = $("p-salida");
+  out.hidden = false;
+  if (!f) { out.textContent = "Elige primero un archivo .ino o .st"; return; }
+  out.textContent = `Compilando ${f.name} para ${eq}…`;
+  const r = await (await fetch(`/api/subir?equipo=${eq}&nombre=${encodeURIComponent(f.name)}`,
+    {method: "POST", body: await f.arrayBuffer()})).json();
+  out.textContent = r.salida;
+  out.className = r.ok ? "" : "mal";
+};
+$("p-fabrica").onclick = async () => {
+  const eq = $("p-equipo").value, out = $("p-salida");
+  out.hidden = false;
+  const r = await (await fetch(`/api/fabrica?equipo=${eq}`, {method: "POST"})).json();
+  out.textContent = r.salida;
+  out.className = r.ok ? "" : "mal";
+};
+let ejemplosVistos = "";
+function pintarEjemplos(lista) {
+  const firma = JSON.stringify(lista || []);
+  if (firma === ejemplosVistos) return;
+  ejemplosVistos = firma;
+  const sel = $("p-ejemplo"), actual = sel.value;
+  sel.innerHTML = `<option value="">— elige un ejemplo —</option>` + (lista || []).map(e =>
+    `<option value="${esc(e.nombre)}" data-tipo="${e.equipo}" data-info="${esc(e.resumen)}">${esc(e.nombre)}</option>`).join("");
+  sel.value = actual;
+}
+$("p-ejemplo").onchange = () => {
+  const o = $("p-ejemplo").selectedOptions[0];
+  $("p-ejemplo-info").textContent = o && o.value ? o.dataset.info : "";
+  // Poner el equipo que corresponde al ejemplo (Controllino o ESP32) del tablero 1
+  if (o && o.value) {
+    const eq = `t1.${o.dataset.tipo}`;
+    if ([...$("p-equipo").options].some(x => x.value === eq)) $("p-equipo").value = eq;
+  }
+};
+$("p-subir-ej").onclick = async () => {
+  const ej = $("p-ejemplo").value, eq = $("p-equipo").value, out = $("p-salida");
+  out.hidden = false;
+  if (!ej) { out.textContent = "Elige primero un ejemplo"; return; }
+  out.textContent = `Compilando ${ej} para ${eq}…`;
+  const r = await (await fetch(`/api/subir_ejemplo?ejemplo=${ej}&equipo=${eq}`, {method: "POST"})).json();
+  out.textContent = r.salida;
+  out.className = r.ok ? "" : "mal";
+};
+
+async function serie() {
+  const eq = $("p-equipo").value;
+  if (!$("serie-vivo").checked || eq.includes("openplc")) {
+    $("serie-equipo").textContent = eq.includes("openplc") ? "(OpenPLC no tiene monitor serie)" : "";
+    return;
+  }
+  $("serie-equipo").textContent = eq;
+  const r = await (await fetch(`/api/serie?equipo=${eq}`)).json();
+  const pre = $("serie"), abajo = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+  pre.textContent = r.texto || "(nada todavía)";
+  if (abajo) pre.scrollTop = pre.scrollHeight;
+}
+
+async function cargarSt(v) {
+  const [archivo, eq] = v.split("|");
+  const out = $("p-salida");
+  out.hidden = false;
+  out.textContent = `Compilando ${archivo} en la CPU ${eq}…`;
+  out.scrollIntoView({behavior: "smooth", block: "center"});
+  const r = await (await fetch(`/api/cargar?archivo=${encodeURIComponent(archivo)}&equipo=${eq}`, {method: "POST"})).json();
+  out.textContent = r.salida;
+  out.className = r.ok ? "" : "mal";
+}
+
+async function abrirGuia(g, titulo) {
+  const t = await (await fetch(`/api/guia?g=${g}`)).text();
+  $("dlg-t").textContent = titulo;
+  $("dlg-c").innerHTML = window.marked ? marked.parse(t) : `<pre>${esc(t)}</pre>`;
+  $("dlg").showModal();
+}
+
+montarTablero(1);
+montarTablero(2);
+pintarFiltros();
+refrescar();
+setInterval(refrescar, 600);
+setInterval(serie, 1500);
+</script>
+</body>
+</html>

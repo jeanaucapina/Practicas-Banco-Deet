@@ -1,0 +1,8 @@
+# Equipos del tablero (Controllino, ESP32 PLC): Python para la imitacion de
+# fabrica y g++ para compilar el .ino del alumno contra el nucleo Arduino
+# virtual (dispositivos/arduino/).
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends g++ iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+# AES-128/CMAC de la MAC LoRaWAN del RN2903 emulado (dispositivos/rn2903.py, guia L10)
+RUN pip install --no-cache-dir cryptography==43.0.3

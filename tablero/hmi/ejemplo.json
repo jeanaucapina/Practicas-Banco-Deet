@@ -1,0 +1,117 @@
+{
+ "nombre": "L2_supervision",
+ "paginas": [
+  {
+   "nombre": "home_page",
+   "widgets": [
+    {
+     "nombre": "label1",
+     "tipo": "label",
+     "x": 20,
+     "y": 10,
+     "w": 420,
+     "h": 56,
+     "texto": "Motor DC — EPC",
+     "fuente": 40
+    },
+    {
+     "nombre": "label3",
+     "tipo": "label",
+     "x": 20,
+     "y": 80,
+     "w": 160,
+     "h": 40,
+     "texto": "Duty [%]",
+     "fuente": 25
+    },
+    {
+     "nombre": "label2",
+     "tipo": "label",
+     "x": 190,
+     "y": 80,
+     "w": 110,
+     "h": 40,
+     "texto": "0",
+     "fuente": 25
+    },
+    {
+     "nombre": "label5",
+     "tipo": "label",
+     "x": 20,
+     "y": 130,
+     "w": 200,
+     "h": 40,
+     "texto": "Velocidad [rpm]",
+     "fuente": 25
+    },
+    {
+     "nombre": "label4",
+     "tipo": "label",
+     "x": 230,
+     "y": 130,
+     "w": 110,
+     "h": 40,
+     "texto": "0",
+     "fuente": 25
+    },
+    {
+     "nombre": "spin_box1",
+     "tipo": "spin_box",
+     "x": 20,
+     "y": 190,
+     "w": 220,
+     "h": 64,
+     "min": 0,
+     "max": 100,
+     "paso": 1,
+     "fuente": 26
+    },
+    {
+     "nombre": "slider1",
+     "tipo": "slider",
+     "x": 700,
+     "y": 20,
+     "w": 70,
+     "h": 330,
+     "min": 0,
+     "max": 100,
+     "paso": 1,
+     "vertical": true
+    },
+    {
+     "nombre": "chart_view1",
+     "tipo": "chart_view",
+     "x": 20,
+     "y": 270,
+     "w": 660,
+     "h": 200,
+     "capacidad": 100,
+     "series": [
+      {
+       "nombre": "line_series1",
+       "color": "#2f62b0",
+       "min": 0,
+       "max": 100
+      },
+      {
+       "nombre": "line_series2",
+       "color": "#e07020",
+       "min": 0,
+       "max": 4000
+      }
+     ]
+    },
+    {
+     "nombre": "label6",
+     "tipo": "label",
+     "x": 360,
+     "y": 80,
+     "w": 320,
+     "h": 120,
+     "texto": "(área de alarmas del Reto)",
+     "fuente": 18
+    }
+   ]
+  }
+ ]
+}

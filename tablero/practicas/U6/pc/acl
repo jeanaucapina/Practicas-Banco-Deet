@@ -1,0 +1,9 @@
+# Taller U6 - Parte IV, FR2 (SR 2.1): control de acceso por rol.
+# operador: lee la telemetria y MANDA al actuador. lector: solo lee la telemetria.
+user operador
+topic read planta/sensor/#
+topic write planta/actuador/#
+topic write planta/seguridad/#
+
+user lector
+topic read planta/sensor/#

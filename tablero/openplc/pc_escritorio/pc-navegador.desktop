@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Navegador
+Comment=Navegador web del PC (http://192.168.1.10/ ...)
+Exec=falkon
+Icon=web-browser

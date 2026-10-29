@@ -1,0 +1,143 @@
+[
+    {
+        "id": "tabL9",
+        "type": "tab",
+        "label": "L9 · ESP32 PLC por MQTT",
+        "disabled": false,
+        "info": "Flujo de partida: lee las entradas que publica el ESP32 PLC y deja un interruptor para su salida Q0.0. Cámbialo y despliega."
+    },
+    {
+        "id": "broker",
+        "type": "mqtt-broker",
+        "name": "Broker del laboratorio",
+        "broker": "192.168.1.50",
+        "port": "1883",
+        "clientid": "nodered-alumno",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true
+    },
+    {
+        "id": "grupoUI",
+        "type": "ui_group",
+        "name": "ESP32 PLC",
+        "tab": "tabUI",
+        "order": 1,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "tabUI",
+        "type": "ui_tab",
+        "name": "Tablero DEET",
+        "icon": "dashboard",
+        "order": 1,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "entradas",
+        "type": "mqtt in",
+        "z": "tabL9",
+        "name": "entradas del ESP32",
+        "topic": "tablero1/alumno/entradas",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "broker",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 160,
+        "y": 100,
+        "wires": [
+            [
+                "verEntradas",
+                "depurar"
+            ]
+        ]
+    },
+    {
+        "id": "verEntradas",
+        "type": "ui_text",
+        "z": "tabL9",
+        "group": "grupoUI",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Entradas",
+        "format": "{{msg.payload}}",
+        "layout": "col-center",
+        "x": 400,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "depurar",
+        "type": "debug",
+        "z": "tabL9",
+        "name": "msg",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "x": 390,
+        "y": 130,
+        "wires": []
+    },
+    {
+        "id": "interruptor",
+        "type": "ui_switch",
+        "z": "tabL9",
+        "name": "",
+        "label": "Q0.0",
+        "group": "grupoUI",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "passthru": false,
+        "decouple": "false",
+        "topic": "q00",
+        "topicType": "str",
+        "style": "",
+        "onvalue": "1",
+        "onvalueType": "str",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "0",
+        "offvalueType": "str",
+        "officon": "",
+        "offcolor": "",
+        "animate": false,
+        "x": 150,
+        "y": 200,
+        "wires": [
+            [
+                "salidaQ00"
+            ]
+        ]
+    },
+    {
+        "id": "salidaQ00",
+        "type": "mqtt out",
+        "z": "tabL9",
+        "name": "orden a Q0.0",
+        "topic": "tablero1/alumno/q00",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "broker",
+        "x": 390,
+        "y": 200,
+        "wires": []
+    }
+]

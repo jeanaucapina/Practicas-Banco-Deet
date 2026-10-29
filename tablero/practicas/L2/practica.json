@@ -1,0 +1,182 @@
+{
+  "id": "L2",
+  "titulo": "HMI industrial STONE y motor con encoder (EPC)",
+  "equipo": "t1.controllino",
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "plantilla": "plantilla.ino",
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "t1.controllino.usb",
+        "pc.usb1"
+      ]
+    ],
+    "energia": [
+      [
+        "t1.fuente",
+        true
+      ],
+      [
+        "t1.controllino",
+        true
+      ],
+      [
+        "t1.hmi",
+        true
+      ]
+    ],
+    "ordenes": [
+      [
+        "t1.controllino",
+        {
+          "cmd": "epc",
+          "conectado": true
+        }
+      ]
+    ],
+    "sin_openplc": true
+  },
+  "marcar": [
+    "t1.controllino.X1D0",
+    "t1.controllino.X1IN1",
+    "t1.controllino.X1GND",
+    "t1.controllino.usb"
+  ],
+  "verificacion": [
+    {
+      "txt": "Parte I · la HMI tiene spin_box1, slider1, label2, label4 y chart_view1",
+      "hacer": [
+        {
+          "tipo": "hmi_widget",
+          "n": 1,
+          "nombre": "spin_box1",
+          "ctl": "spin_box"
+        },
+        {
+          "tipo": "hmi_widget",
+          "n": 1,
+          "nombre": "slider1",
+          "ctl": "slider"
+        },
+        {
+          "tipo": "hmi_widget",
+          "n": 1,
+          "nombre": "label2",
+          "ctl": "label"
+        },
+        {
+          "tipo": "hmi_widget",
+          "n": 1,
+          "nombre": "label4",
+          "ctl": "label"
+        },
+        {
+          "tipo": "hmi_widget",
+          "n": 1,
+          "nombre": "chart_view1",
+          "ctl": "chart_view"
+        }
+      ]
+    },
+    {
+      "txt": "Parte II · el EPC está cableado al puerto X1 (D0 → IN MOTOR, GND, IN1 ← ENCODER)",
+      "hacer": [
+        {
+          "tipo": "estado",
+          "equipo": "t1.controllino",
+          "clave": "epc.conectado",
+          "valor": true,
+          "max_ms": 6000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · slider1 al 50 %: el motor gira y label4 muestra ~1600 rpm",
+      "hacer": [
+        {
+          "tipo": "pausa",
+          "ms": 1500
+        },
+        {
+          "tipo": "hmi_tocar",
+          "n": 1,
+          "nombre": "slider1",
+          "ev": "set",
+          "v": 50
+        },
+        {
+          "tipo": "hmi_var",
+          "n": 1,
+          "nombre": "label2",
+          "texto": "^50$",
+          "max_ms": 3000
+        },
+        {
+          "tipo": "hmi_var",
+          "n": 1,
+          "nombre": "label4",
+          "texto": "^1[4-7]\\d\\d$",
+          "max_ms": 5000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · la gráfica recibe duty (line_series1) y rpm (line_series2)",
+      "hacer": [
+        {
+          "tipo": "hmi_serie",
+          "n": 1,
+          "nombre": "line_series1",
+          "min": 2,
+          "valor": 50,
+          "max_ms": 3000
+        },
+        {
+          "tipo": "hmi_serie",
+          "n": 1,
+          "nombre": "line_series2",
+          "min": 2,
+          "valor": [
+            1400,
+            1800
+          ],
+          "max_ms": 3000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · la medida se renueva una vez por segundo (Timer1 en CTC)",
+      "hacer": [
+        {
+          "tipo": "serie",
+          "equipo": "t1.controllino",
+          "regex": "(?s)\\d+ ms.*\\n.*\\d+ ms",
+          "max_ms": 3500
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · slider1 a 0: el motor se para y la lectura es exactamente 0",
+      "hacer": [
+        {
+          "tipo": "hmi_tocar",
+          "n": 1,
+          "nombre": "slider1",
+          "ev": "set",
+          "v": 0
+        },
+        {
+          "tipo": "hmi_var",
+          "n": 1,
+          "nombre": "label4",
+          "texto": "^0$",
+          "max_ms": 6000
+        }
+      ]
+    }
+  ]
+}

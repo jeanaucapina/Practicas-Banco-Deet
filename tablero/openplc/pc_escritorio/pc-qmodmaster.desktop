@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=QModMaster
+Comment=Maestro Modbus RTU/TCP de diagnostico (convertidor USB-RS485 en /dev/ttyUSB0)
+Exec=qmodmaster
+Icon=network-workgroup

@@ -1,0 +1,157 @@
+{
+  "id": "U4",
+  "titulo": "Taller: comparación de tramas y selección de protocolo por caso de estudio",
+  "equipo": "",
+  "exige_programa": false,
+  "lenguajes": [],
+  "enunciado": "enunciado.md",
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "usb485.A",
+        "t1.controllino.485A"
+      ],
+      [
+        "usb485.B",
+        "t1.controllino.485B"
+      ]
+    ],
+    "energia": [
+      [
+        "t1.controllino",
+        true
+      ]
+    ],
+    "ordenes": [],
+    "generar": [
+      [
+        "herramientas/u4_capturas.py",
+        "u4_goose.pcap"
+      ],
+      [
+        "herramientas/l8_captura_planta.py",
+        "l8_planta.pcapng",
+        30
+      ]
+    ]
+  },
+  "marcar": [],
+  "verificacion": [
+    {
+      "txt": "Ejercicio 1 · sobrecarga de Modbus RTU, Modbus TCP, PROFINET RT y CAN",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^H_modbus_rtu\\s*=\\s*(23[.,][78]\\d*|24([.,]0\\d*)?)\\s*$"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^H_modbus_tcp\\s*=\\s*(81[.,][78]\\d*|82([.,]0\\d*)?)\\s*$"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^H_profinet\\s*=\\s*(37[.,]5\\d*)\\s*$"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^H_can\\s*=\\s*(40[.,][67]\\d*|41([.,]0\\d*)?)\\s*$"
+        }
+      ]
+    },
+    {
+      "txt": "Análisis 1 · los bytes que PROFINET RT ahorra al prescindir de IP y TCP",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^ahorro_ip_tcp_B\\s*=\\s*(40)\\s*$"
+        }
+      ]
+    },
+    {
+      "txt": "Captura GOOSE · EtherType, stNum del disparo, primer reenvío y su TAL",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^goose_ethertype\\s*=\\s*((0x)?88[bB]8)\\s*$"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^goose_stnum_disparo\\s*=\\s*(2)\\s*$"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^goose_primer_reenvio_ms\\s*=\\s*(4([.,]0+)?)\\s*$"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^goose_tal_disparo_ms\\s*=\\s*(8([.,]0+)?)\\s*$"
+        }
+      ]
+    },
+    {
+      "txt": "Captura GOOSE · del disparo del relé a la apertura publicada por el interruptor",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^goose_apertura_ms\\s*=\\s*(60([.,]0+)?)\\s*$"
+        }
+      ]
+    },
+    {
+      "txt": "Captura DNP3 · puntos analógicos del sondeo y el evento no solicitado (índice y valor)",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^dnp3_puntos_analogicos\\s*=\\s*(4)\\s*$"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^dnp3_indice_evento\\s*=\\s*(2)\\s*$"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^dnp3_valor_evento\\s*=\\s*(74)\\s*$"
+        }
+      ]
+    },
+    {
+      "txt": "Captura DeviceNet · identificador CAN y el esclavo cuyas entradas cambian",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^can_id_bits\\s*=\\s*(11)\\s*$"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "cat ~/trabajo/U4/respuestas.txt",
+          "regex": "(?m)^devicenet_mac_cambia\\s*=\\s*(11)\\s*$"
+        }
+      ]
+    },
+    {
+      "txt": "Ejercicio 3 · matriz de decisión coherente (S_j en [1, 5], ganador por delante, alternativas del caso)",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "python3 ~/trabajo/U4/revisar_matriz.py",
+          "regex": "^OK"
+        }
+      ]
+    }
+  ]
+}

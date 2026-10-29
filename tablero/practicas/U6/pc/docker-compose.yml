@@ -1,0 +1,41 @@
+# Taller U6 - Parte IV: el broker Mosquitto ENDURECIDO en tu Docker, enchufado al segmento
+# del banco (tab_lan) como el broker de la Practica L9, pero en .52 y solo por TLS (8883).
+# Reemplaza al de L9 (allow_anonymous true): autenticacion, ACL por rol, TLS y log.
+#
+#   cd tablero/run/pc/U6
+#   docker compose -p u6 up -d
+#   # probar desde el PC del banco (operador, con TLS; el cert queda en esta carpeta):
+#   mosquitto_pub --cafile server.crt -h 192.168.1.52 -p 8883 -u operador -P banco \
+#                 -t planta/sensor/t -m 25
+#   docker compose -p u6 down            # al terminar
+#
+# Todo (config, acl, arranque y los secretos que se generan) vive en esta carpeta, que es
+# ~/trabajo/U6 del PC del banco: por eso el PC puede leer server.crt para conectarse por TLS.
+services:
+  # El certificado TLS lo genera un contenedor efimero con openssl (la imagen de Mosquitto
+  # no lo trae). Solo la primera vez; luego el broker reutiliza server.crt / server.key.
+  cert:
+    image: alpine/openssl:3.3.2
+    container_name: u6-cert
+    working_dir: /c
+    entrypoint:
+      - sh
+      - -c
+      - '[ -f server.crt ] || openssl req -x509 -newkey rsa:2048 -nodes -days 365 -keyout server.key -out server.crt -subj "/CN=broker.planta.local"'
+    volumes:
+      - ./:/c
+
+  broker:
+    image: eclipse-mosquitto:2
+    container_name: u6-broker
+    hostname: broker-seguro
+    user: root
+    depends_on:
+      cert: { condition: service_completed_successfully }
+    entrypoint: ["sh", "/mosquitto/config/arranque_broker.sh"]
+    environment: [OP_PASS=banco, LEC_PASS=banco]     # claves de laboratorio: cambialas
+    volumes:
+      - ./:/mosquitto/config
+    networks: { tab_lan: { ipv4_address: 192.168.1.52 } }
+networks:
+  tab_lan: { external: true }

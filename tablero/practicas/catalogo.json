@@ -1,0 +1,176 @@
+[
+ {
+  "id": "LIBRE",
+  "tipo": "Libre",
+  "titulo": "Laboratorio libre: arma y prueba tu propia topología",
+  "fecha": "cuando quieras",
+  "entregable": "—",
+  "estado": "lista"
+ },
+ {
+  "id": "L0",
+  "tipo": "Práctica",
+  "titulo": "Reconocimiento del banco de control",
+  "fecha": "mié 9 sep · S1",
+  "entregable": "Informe IEEE + ficha del banco",
+  "estado": "lista",
+  "guia": "ii-l0-guia-v2.pdf"
+ },
+ {
+  "id": "L1",
+  "tipo": "Práctica",
+  "titulo": "E/S digitales, rebote y máquina de estados",
+  "fecha": "mié 16 sep · S2",
+  "entregable": "Informe IEEE + código + reto FSM",
+  "estado": "lista",
+  "guia": "ii-l1-guia-v2.pdf"
+ },
+ {
+  "id": "L2",
+  "tipo": "Práctica",
+  "titulo": "HMI industrial STONE y motor con encoder (EPC)",
+  "fecha": "mié 23 sep · S3",
+  "entregable": "Informe IEEE + demo de pantalla",
+  "estado": "lista",
+  "guia": "ii-l2-guia-v2.pdf"
+ },
+ {
+  "id": "L3",
+  "tipo": "Práctica",
+  "titulo": "Comunicación serial RS-485 con tramas propias",
+  "fecha": "mié 30 sep · S4 · S5",
+  "entregable": "Informe IEEE + mapeo OSI de la trama",
+  "estado": "lista",
+  "guia": "ii-l3-guia-v2.pdf"
+ },
+ {
+  "id": "L4",
+  "tipo": "Práctica",
+  "titulo": "Captura y análisis de tráfico (Wireshark + Docker)",
+  "fecha": "mié 7 oct · S6",
+  "entregable": "Informe IEEE + capturas .pcap comentadas",
+  "estado": "lista",
+  "guia": "ii-l4-guia-v2.pdf"
+ },
+ {
+  "id": "L5",
+  "tipo": "Práctica",
+  "titulo": "Planificación de red (GNS3 / Sinetplan / red emulada)",
+  "fecha": "mié 4 nov · S7",
+  "entregable": "Informe IEEE + topología y cálculo de carga",
+  "estado": "lista",
+  "guia": "ii-l5-guia-v2.pdf"
+ },
+ {
+  "id": "L6",
+  "tipo": "Práctica",
+  "titulo": "Modbus RTU maestro-esclavo sobre RS-485",
+  "fecha": "mié 14 oct · S8 · S9",
+  "entregable": "Informe IEEE + diagnóstico con QModMaster",
+  "estado": "lista",
+  "guia": "ii-l6-guia-v2.pdf"
+ },
+ {
+  "id": "L7",
+  "tipo": "Práctica",
+  "titulo": "Modbus TCP por Ethernet",
+  "fecha": "mié 21 oct · S10",
+  "entregable": "Informe IEEE + captura del MBAP",
+  "estado": "lista",
+  "guia": "ii-l7-guia-v2.pdf"
+ },
+ {
+  "id": "L8",
+  "tipo": "Práctica",
+  "titulo": "PROFINET: anatomía, disección y generación de tramas",
+  "fecha": "mié 4 nov · S11",
+  "entregable": "Informe IEEE + análisis DCP/LLDP",
+  "estado": "lista",
+  "guia": "ii-l8-guia-v2.pdf"
+ },
+ {
+  "id": "L9",
+  "tipo": "Práctica",
+  "titulo": "WiFi industrial, MQTT y pasarela Node-RED",
+  "fecha": "mié 28 oct · S13",
+  "entregable": "Informe IEEE + dashboard publicando",
+  "estado": "lista",
+  "guia": "ii-l9-guia-v2.pdf"
+ },
+ {
+  "id": "L10",
+  "tipo": "Práctica",
+  "titulo": "IIoT con LoRaWAN (RN2903 · ChirpStack)",
+  "fecha": "mié 11 nov · S14",
+  "entregable": "Informe IEEE + trama binaria decodificada",
+  "estado": "lista",
+  "guia": "ii-l10-guia-v2.pdf"
+ },
+ {
+  "id": "U2",
+  "tipo": "Taller",
+  "titulo": "Modelo OSI y acceso al medio",
+  "fecha": "sáb 26 sep · S5",
+  "entregable": "Hoja de taller resuelta",
+  "estado": "lista",
+  "guia": "ii-u2-guia-v2.pdf"
+ },
+ {
+  "id": "U4",
+  "tipo": "Taller",
+  "titulo": "Comparativa de tramas y selección de protocolo",
+  "fecha": "sáb 24 oct · S12",
+  "entregable": "4 casos resueltos + matriz de decisión",
+  "estado": "lista",
+  "guia": "ii-u4-guia-v2.pdf"
+ },
+ {
+  "id": "U6",
+  "tipo": "Taller",
+  "titulo": "Seguridad IEC 62443 sobre el banco",
+  "fecha": "sáb 21 nov · S15",
+  "entregable": "Explotación didáctica + contramedidas",
+  "estado": "lista",
+  "guia": "ii-u6-guia-v2.pdf"
+ },
+ {
+  "id": "L11",
+  "tipo": "Extra",
+  "titulo": "Pirámide CIM completa: del ERP al campo (ISA-95)",
+  "fecha": "extra · pirámide ISA-95",
+  "entregable": "Informe IEEE + diagrama de la pirámide del banco",
+  "estado": "lista"
+ },
+ {
+  "id": "L12",
+  "tipo": "Extra",
+  "titulo": "Comunicación entre tableros: RS-485 y Ethernet entre dos bancos",
+  "fecha": "extra · dos bancos",
+  "entregable": "Informe IEEE + hoja de pérdidas con y sin enlace",
+  "estado": "lista"
+ },
+ {
+  "id": "L13",
+  "tipo": "Extra",
+  "titulo": "OPC UA · nivel de entrada: tu servidor del tablero y UaExpert",
+  "fecha": "extra · OPC UA 1/3",
+  "entregable": "Informe IEEE + capturas de UaExpert",
+  "estado": "lista"
+ },
+ {
+  "id": "L14",
+  "tipo": "Extra",
+  "titulo": "OPC UA con Python: datalogger y termostato del tablero",
+  "fecha": "extra · OPC UA 2/3",
+  "entregable": "Informe IEEE + datos_planta.csv + código",
+  "estado": "lista"
+ },
+ {
+  "id": "L15",
+  "tipo": "Extra",
+  "titulo": "OPC UA · control ON/OFF con histéresis y migración de NodeIds",
+  "fecha": "extra · OPC UA 3/3",
+  "entregable": "Informe IEEE + gráfica de la respuesta",
+  "estado": "lista"
+ }
+]

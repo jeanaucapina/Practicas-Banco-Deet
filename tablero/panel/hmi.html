@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STONE Designer virtual</title>
+<style>
+  :root {
+    --fondo: #f3f4f1; --tarjeta: #fdfdfb; --borde: #dcdfd8; --texto: #1c2321; --suave: #5b6560;
+    --acento: #1f7f74; --acento-f: #d6efe9; --naranja: #c2571a; --rojo: #b3261e; --verde: #2e9d4f; --azul: #2f62b0;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --pantalla: #f4f6f8; --w-texto: #1d2733;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fondo: #121614; --tarjeta: #1b201e; --borde: #2c3330; --texto: #e6ebe8; --suave: #9aa6a0;
+            --acento: #5fd0c2; --acento-f: #183330; --naranja: #f2994a; --rojo: #f2867c; --verde: #5ad17a; --azul: #7fa8f0; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 14px/1.4 system-ui, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--tarjeta); border-bottom: 1px solid var(--borde); padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header h1 { font-size: 16px; margin: 0 10px 0 0; }
+  button, select, input { font: inherit; font-size: 13px; }
+  button { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: var(--acento); }
+  button.prim { background: var(--acento); color: var(--tarjeta); border-color: var(--acento); font-weight: 600; }
+  button.activo { background: var(--azul); color: #fff; border-color: var(--azul); }
+  input, select { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 6px; padding: 4px 6px; width: 100%; }
+  input[type=checkbox] { width: auto; }
+  main { display: grid; grid-template-columns: 160px minmax(0, 1fr) 260px; gap: 12px; padding: 12px; align-items: start; }
+  @media (max-width: 1200px) { main { grid-template-columns: 1fr; } }
+  .caja { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 12px; }
+  .caja h2 { font-size: 13px; margin: 0 0 8px; color: var(--suave); text-transform: uppercase; letter-spacing: .04em; }
+  .paleta button { display: block; width: 100%; text-align: left; margin-bottom: 6px; font-family: var(--mono); font-size: 12.5px; }
+  .paginas { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .lienzo-wrap { overflow: auto; }
+  #lienzo { position: relative; background: var(--pantalla); border: 10px solid #1d2126; border-radius: 12px; margin: 0 auto;
+            background-image: linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px);
+            background-size: 20px 20px; user-select: none; touch-action: none; }
+  #lienzo.prueba { background-image: none; }
+  .w { position: absolute; color: var(--w-texto); display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; border-radius: 6px; }
+  .w.sel { outline: 2px dashed var(--naranja); outline-offset: 1px; z-index: 5; }
+  .w .asa { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; background: var(--naranja); cursor: nwse-resize; display: none; }
+  #lienzo:not(.prueba) .w.sel .asa { display: block; }
+  .w .nom { position: absolute; left: 2px; top: 0; font: 9px var(--mono); color: #7b8794; pointer-events: none; }
+  #lienzo.prueba .w .nom { display: none; }
+  .w.label { justify-content: flex-start; padding-left: 4px; white-space: nowrap; }
+  .w.button { background: #2f62b0; color: #fff; cursor: pointer; font-weight: 600; box-shadow: 0 2px 0 #1f467f; }
+  .w.button.pulsado { background: #1f467f; }
+  .w.switch .riel { width: 70%; height: 60%; border-radius: 999px; background: #b9c2cc; position: relative; }
+  .w.switch .riel::after { content: ""; position: absolute; top: 8%; left: 4%; width: 40%; height: 84%; border-radius: 50%; background: #fff; transition: left .15s; }
+  .w.switch.on .riel { background: var(--verde); } .w.switch.on .riel::after { left: 56%; }
+  .w.slider .pista { position: absolute; background: #c9d1da; border-radius: 4px; }
+  .w.slider .pista i { position: absolute; background: #2f62b0; border-radius: 4px; }
+  .w.slider .bola { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid #2f62b0; margin: -11px 0 0 -11px; }
+  .w.spin_box { background: #fff; border: 2px solid #9aa6b4; justify-content: space-between; }
+  .w.spin_box b { flex: 1; font: 600 1.2em var(--mono); }
+  .w.spin_box span[data-d] { width: 26%; height: 100%; display: flex; align-items: center; justify-content: center; background: #e3e8ee; font-weight: 700; cursor: pointer; }
+  .w.progress_bar { background: #dfe4ea; justify-content: flex-start; }
+  .w.progress_bar i { display: block; height: 100%; background: var(--acento); }
+  .w.edit { background: #fff; border: 2px solid #9aa6b4; justify-content: flex-start; padding-left: 6px; font-family: var(--mono); }
+  .w.chart_view { background: #fff; border: 1px solid #c3ccd6; }
+  .w.chart_view svg { width: 100%; height: 100%; }
+  .campos label { display: block; font-size: 12px; color: var(--suave); margin-top: 6px; }
+  .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .fila3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  td, th { border-bottom: 1px solid var(--borde); padding: 3px 6px; text-align: left; font-family: var(--mono); }
+  pre { background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 8px; font: 12px/1.4 var(--mono); overflow: auto; max-height: 260px; margin: 6px 0 0; white-space: pre-wrap; word-break: break-all; }
+  .inferior { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 12px 16px; }
+  @media (max-width: 1200px) { .inferior { grid-template-columns: 1fr; } }
+  .nota { color: var(--suave); font-size: 12.5px; }
+  .tx { color: var(--azul); } .rx { color: var(--verde); }
+  #estado-hmi { font-size: 12.5px; color: var(--suave); }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>STONE Designer <span style="font-weight:400;color:var(--suave)">· STWC050WT-01, 5" 800×480, RS-232 115 200</span></h1>
+  <input id="nombre" style="width:200px" placeholder="Nombre del proyecto">
+  <button onclick="nuevo()">Nuevo</button>
+  <button onclick="cargarEjemplo()">Ejemplo L2</button>
+  <button onclick="document.getElementById('abrir').click()">Abrir…</button>
+  <input type="file" id="abrir" accept=".json" class="oculto">
+  <button onclick="guardar()">Guardar .json</button>
+  <span style="flex:1"></span>
+  <select id="n" style="width:auto"><option value="1">HMI del tablero 1</option><option value="2">HMI del tablero 2</option></select>
+  <button class="prim" onclick="cargarEnHMI()" title="Como «download» de STONE Designer con el USB A–A">Descargar a la HMI</button>
+  <button id="b-modo" onclick="alternarModo()">▶ Probar</button>
+  <span id="estado-hmi"></span>
+</header>
+
+<main>
+  <aside class="caja paleta">
+    <h2>Widgets</h2>
+    <button onclick="anadir('label')">label</button>
+    <button onclick="anadir('button')">button</button>
+    <button onclick="anadir('switch')">switch</button>
+    <button onclick="anadir('slider')">slider</button>
+    <button onclick="anadir('spin_box')">spin_box</button>
+    <button onclick="anadir('progress_bar')">progress_bar</button>
+    <button onclick="anadir('edit')">edit</button>
+    <button onclick="anadir('chart_view')">chart_view</button>
+    <h2 style="margin-top:12px">Páginas</h2>
+    <div class="paginas" id="paginas"></div>
+    <label class="nota">Nombre de la página</label><input id="pg-nombre">
+    <button style="margin-top:6px" onclick="nuevaPagina()">+ Página</button>
+    <button style="margin-top:6px" onclick="quitarPagina()">– Quitar esta</button>
+  </aside>
+
+  <section class="caja">
+    <div class="lienzo-wrap"><div id="lienzo"></div></div>
+    <div class="nota" id="ayuda" style="margin-top:8px">Haz clic en un widget para elegirlo y arrástralo; el cuadro naranja de la esquina cambia su tamaño. Tu programa los manda y los lee por su <b>nombre</b> (el gris de la esquina).</div>
+  </section>
+
+  <aside class="caja campos" id="props">
+    <h2>Propiedades</h2>
+    <div id="props-vacio" class="nota">Elige un widget.</div>
+    <div id="props-form" class="oculto">
+      <label>Tipo</label><input id="p-tipo" disabled>
+      <label>Nombre (widget)</label><input id="p-nombre">
+      <div id="g-texto"><label>Texto</label><input id="p-texto"></div>
+      <div id="g-fuente"><label>Tamaño de fuente</label><input id="p-fuente" type="number" min="8" max="80"></div>
+      <div class="fila3" id="g-rango"><div><label>Mín.</label><input id="p-min" type="number"></div>
+        <div><label>Máx.</label><input id="p-max" type="number"></div><div><label>Paso</label><input id="p-paso" type="number"></div></div>
+      <div id="g-vertical"><label><input id="p-vertical" type="checkbox"> Vertical</label></div>
+      <div id="g-dest"><label>Al pulsar, abrir la página</label><input id="p-dest" placeholder="(ninguna)"></div>
+      <div id="g-series"><label>Series (nombre:color:mín:máx, una por línea)</label>
+        <textarea id="p-series" rows="3" style="width:100%;font:12px var(--mono)"></textarea>
+        <label>capacity (puntos)</label><input id="p-capacidad" type="number"></div>
+      <div class="fila2"><div><label>X</label><input id="p-x" type="number"></div><div><label>Y</label><input id="p-y" type="number"></div>
+        <div><label>Ancho</label><input id="p-w" type="number"></div><div><label>Alto</label><input id="p-h" type="number"></div></div>
+      <button style="margin-top:10px;color:var(--rojo)" onclick="borrar()">Eliminar widget</button>
+    </div>
+  </aside>
+</main>
+
+<div class="inferior">
+  <div class="caja">
+    <h2>Widgets del proyecto <span class="nota" style="text-transform:none">(lo que tu programa nombra)</span></h2>
+    <table id="mapa"></table>
+    <button style="margin-top:8px" onclick="verCodigo()">Código de ejemplo (librerías del banco)</button>
+    <pre id="codigo" class="oculto"></pre>
+  </div>
+  <div class="caja">
+    <h2>Puerto serie <span class="nota" style="text-transform:none">(Serial2 del Controllino ⇄ HMI, 115 200 8N1)</span></h2>
+    <div class="nota">MCU → HMI: <code>ST&lt;{"cmd_code":"set_text","type":"label","widget":"label2","text":"42"}&gt;ET</code>.
+      HMI → MCU: <code>ST&lt;</code> comando(2) longitud(2) <code>nombre:valor</code> <code>&gt;ET</code> CRC16.</div>
+    <pre id="tramas">(en «Probar» ves aquí las tramas reales)</pre>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const ESC = 0.95, AN = 800, AL = 480;
+const params = new URLSearchParams(location.search);
+$("n").value = params.get("n") === "2" ? "2" : "1";
+
+let proy = {nombre: "L2_supervision", paginas: [{nombre: "home_page", widgets: []}]};
+let pag = 0, sel = null, prueba = false, vivo = null;
+
+const DEF = {
+  label: {w: 220, h: 44, texto: "label", fuente: 25},
+  button: {w: 150, h: 60, texto: "Botón", fuente: 22, pagina_destino: ""},
+  switch: {w: 110, h: 54},
+  slider: {w: 320, h: 50, min: 0, max: 100, paso: 1},
+  spin_box: {w: 200, h: 60, min: 0, max: 100, paso: 1, fuente: 24},
+  progress_bar: {w: 320, h: 30, min: 0, max: 100},
+  edit: {w: 260, h: 50, texto: "", fuente: 20},
+  chart_view: {w: 520, h: 260, capacidad: 100, series: [{nombre: "line_series1", color: "#2f62b0", min: 0, max: 100}]},
+};
+
+function esc(t) { return String(t).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
+const actual = () => proy.paginas[pag];
+const todos = () => proy.paginas.flatMap(p => p.widgets);
+const elegido = () => actual().widgets.find(w => w.nombre === sel);
+const valor = w => vivo && vivo.valores && w.nombre in vivo.valores ? vivo.valores[w.nombre] : (w.min || 0);
+const texto = w => vivo && vivo.textos && w.nombre in vivo.textos ? vivo.textos[w.nombre] : w.texto;
+const frac = (v, a, b) => Math.max(0, Math.min(1, (v - a) / ((b - a) || 1)));
+
+// ── Dibujo ──────────────────────────────────────────────────────────────
+function grafica(w) {
+  const W = w.w, H = w.h, m = 8;
+  let s = '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none">';
+  for (let k = 1; k < 4; k++) s += '<line x1="0" x2="' + W + '" y1="' + H * k / 4 + '" y2="' + H * k / 4 + '" stroke="#e5e9ee"/>';
+  for (const sr of w.series || []) {
+    const pts = (vivo && vivo.series && vivo.series[sr.nombre]) || [];
+    const n = Math.max(2, w.capacidad || 100);
+    const xy = pts.map((v, i) => ((W - 2 * m) * i / (n - 1) + m).toFixed(1) + "," + (H - m - (H - 2 * m) * frac(v, sr.min, sr.max)).toFixed(1)).join(" ");
+    if (pts.length) s += '<polyline fill="none" stroke-width="3" stroke="' + esc(sr.color) + '" points="' + xy + '"/>';
+  }
+  const ley = (w.series || []).map((sr, i) => '<text x="' + (6 + i * 150) + '" y="14" font-size="12" fill="' + esc(sr.color) + '">' + esc(sr.nombre) + " " + sr.min + "–" + sr.max + "</text>").join("");
+  return s + ley + "</svg>";
+}
+
+function pintarWidget(w) {
+  const d = document.createElement("div");
+  d.className = "w " + w.tipo + (sel === w.nombre && !prueba ? " sel" : "");
+  d.dataset.n = w.nombre;
+  d.style.cssText = "left:" + w.x * ESC + "px;top:" + w.y * ESC + "px;width:" + w.w * ESC + "px;height:" + w.h * ESC + "px;font-size:" + (w.fuente || 20) * ESC + "px";
+  const v = valor(w);
+  let html = "";
+  switch (w.tipo) {
+    case "label": case "edit": html = esc(texto(w)); break;
+    case "button": html = esc(w.texto); break;
+    case "switch": html = '<span class="riel"></span>'; if (v) d.classList.add("on"); break;
+    case "slider": {
+      const f = frac(v, w.min, w.max);
+      html = w.vertical
+        ? '<div class="pista" style="left:45%;width:10%;top:6%;height:88%"><i style="left:0;width:100%;bottom:0;height:' + f * 100 + '%"></i></div><div class="bola" style="left:50%;top:' + (94 - f * 88) + '%"></div>'
+        : '<div class="pista" style="top:45%;height:10%;left:4%;width:92%"><i style="top:0;height:100%;left:0;width:' + f * 100 + '%"></i></div><div class="bola" style="top:50%;left:' + (4 + f * 92) + '%"></div>';
+      break; }
+    case "spin_box": html = '<span data-d="-1">−</span><b>' + Math.round(v) + '</b><span data-d="1">+</span>'; break;
+    case "progress_bar": html = '<i style="width:' + frac(v, w.min, w.max) * 100 + '%"></i>'; break;
+    case "chart_view": html = grafica(w); break;
+  }
+  d.innerHTML = html + '<span class="nom">' + esc(w.nombre) + '</span><span class="asa"></span>';
+  return d;
+}
+
+function dibujar() {
+  const L = $("lienzo");
+  L.style.width = AN * ESC + 20 + "px"; L.style.height = AL * ESC + 20 + "px";
+  L.classList.toggle("prueba", prueba);
+  L.innerHTML = "";
+  for (const w of actual().widgets) L.appendChild(pintarWidget(w));
+  $("paginas").innerHTML = proy.paginas.map((p, i) => '<button class="' + (i === pag ? "activo" : "") + '" onclick="irPagina(' + i + ')">' + esc(p.nombre) + "</button>").join("");
+  $("pg-nombre").value = actual().nombre;
+  $("nombre").value = proy.nombre;
+  mapa();
+}
+function irPagina(i) { pag = i; sel = null; props(); dibujar(); }
+
+// ── Edición ─────────────────────────────────────────────────────────────
+function nombreLibre(base) { let k = 1; while (todos().some(w => w.nombre === base + k)) k++; return base + k; }
+function anadir(tipo) {
+  if (prueba) return;
+  const w = Object.assign({nombre: nombreLibre(tipo), tipo, x: 20 + (actual().widgets.length % 6) * 30, y: 30 + (actual().widgets.length % 6) * 30,
+    w: 120, h: 40, texto: "", fuente: 20, min: 0, max: 100, paso: 1, vertical: false, pagina_destino: ""}, JSON.parse(JSON.stringify(DEF[tipo])));
+  if (tipo === "label") w.texto = w.nombre;
+  actual().widgets.push(w); sel = w.nombre; props(); dibujar(); guardarBorrador();
+}
+function props() {
+  const w = elegido();
+  $("props-vacio").classList.toggle("oculto", !!w); $("props-form").classList.toggle("oculto", !w);
+  if (!w) return;
+  const t = w.tipo;
+  $("p-tipo").value = t; $("p-nombre").value = w.nombre; $("p-texto").value = w.texto || ""; $("p-fuente").value = w.fuente || 20;
+  $("p-min").value = w.min; $("p-max").value = w.max; $("p-paso").value = w.paso || 1; $("p-vertical").checked = !!w.vertical;
+  $("p-dest").value = w.pagina_destino || "";
+  $("p-series").value = (w.series || []).map(s => [s.nombre, s.color, s.min, s.max].join(":")).join("\n");
+  $("p-capacidad").value = w.capacidad || 100;
+  $("p-x").value = w.x; $("p-y").value = w.y; $("p-w").value = w.w; $("p-h").value = w.h;
+  $("g-texto").classList.toggle("oculto", !["label", "button", "edit"].includes(t));
+  $("g-fuente").classList.toggle("oculto", !["label", "button", "edit", "spin_box"].includes(t));
+  $("g-rango").classList.toggle("oculto", !["slider", "spin_box", "progress_bar"].includes(t));
+  $("g-vertical").classList.toggle("oculto", t !== "slider");
+  $("g-dest").classList.toggle("oculto", t !== "button");
+  $("g-series").classList.toggle("oculto", t !== "chart_view");
+}
+function leerProps() {
+  const w = elegido(); if (!w) return;
+  const nuevo = ($("p-nombre").value || w.nombre).replace(/[^\w]/g, "_").slice(0, 24);
+  if (nuevo !== w.nombre && !todos().some(x => x.nombre === nuevo)) w.nombre = nuevo;
+  sel = w.nombre;
+  w.texto = $("p-texto").value; w.fuente = parseInt($("p-fuente").value) || 20;
+  w.min = parseFloat($("p-min").value) || 0; w.max = parseFloat($("p-max").value) || 0; w.paso = parseFloat($("p-paso").value) || 1;
+  w.vertical = $("p-vertical").checked; w.pagina_destino = $("p-dest").value.trim();
+  if (w.tipo === "chart_view") {
+    w.series = $("p-series").value.split("\n").map(l => l.trim()).filter(Boolean).slice(0, 4).map(l => {
+      const [nombre, color, a, b] = l.split(":"); return {nombre: (nombre || "line_series1").replace(/[^\w]/g, "_"), color: color || "#2f62b0", min: parseFloat(a) || 0, max: parseFloat(b) || 100}; });
+    w.capacidad = Math.max(10, Math.min(500, parseInt($("p-capacidad").value) || 100));
+  }
+  w.x = parseInt($("p-x").value) || 0; w.y = parseInt($("p-y").value) || 0; w.w = Math.max(8, parseInt($("p-w").value) || 8); w.h = Math.max(8, parseInt($("p-h").value) || 8);
+  dibujar(); guardarBorrador();
+}
+for (const id of ["p-nombre", "p-texto", "p-fuente", "p-min", "p-max", "p-paso", "p-vertical", "p-dest", "p-series", "p-capacidad", "p-x", "p-y", "p-w", "p-h"])
+  $(id).addEventListener("change", leerProps);
+$("pg-nombre").addEventListener("change", () => { actual().nombre = $("pg-nombre").value.replace(/[^\w]/g, "_") || actual().nombre; dibujar(); guardarBorrador(); });
+function borrar() { const p = actual(); p.widgets = p.widgets.filter(w => w.nombre !== sel); sel = null; props(); dibujar(); guardarBorrador(); }
+function nuevaPagina() { proy.paginas.push({nombre: "page" + (proy.paginas.length + 1), widgets: []}); irPagina(proy.paginas.length - 1); guardarBorrador(); }
+function quitarPagina() { if (proy.paginas.length < 2) return; proy.paginas.splice(pag, 1); pag = Math.max(0, pag - 1); sel = null; props(); dibujar(); guardarBorrador(); }
+function nuevo() { if (!confirm("¿Empezar un proyecto vacío?")) return; proy = {nombre: "L2_supervision", paginas: [{nombre: "home_page", widgets: []}]}; pag = 0; sel = null; props(); dibujar(); guardarBorrador(); }
+$("nombre").addEventListener("change", () => { proy.nombre = $("nombre").value; guardarBorrador(); });
+
+// Arrastrar / redimensionar / tocar
+let arr = null;
+const pos = e => { const r = $("lienzo").getBoundingClientRect(); return [(e.clientX - r.left - 10) / ESC, (e.clientY - r.top - 10) / ESC]; };
+$("lienzo").addEventListener("pointerdown", e => {
+  const d = e.target.closest(".w"); if (!d) { if (!prueba) { sel = null; props(); dibujar(); } return; }
+  const w = actual().widgets.find(x => x.nombre === d.dataset.n);
+  if (prueba) { tocarInicio(w, e); arr = {w, prueba: true}; $("lienzo").setPointerCapture(e.pointerId); return; }
+  sel = w.nombre; props();
+  arr = {w, x0: e.clientX, y0: e.clientY, wx: w.x, wy: w.y, ww: w.w, wh: w.h, redim: e.target.classList.contains("asa")};
+  dibujar(); $("lienzo").setPointerCapture(e.pointerId);
+});
+$("lienzo").addEventListener("pointermove", e => {
+  if (!arr) return;
+  if (arr.prueba) { if (arr.w.tipo === "slider") deslizar(arr.w, e); return; }
+  const dx = Math.round((e.clientX - arr.x0) / ESC / 4) * 4, dy = Math.round((e.clientY - arr.y0) / ESC / 4) * 4;
+  if (arr.redim) { arr.w.w = Math.max(16, arr.ww + dx); arr.w.h = Math.max(16, arr.wh + dy); }
+  else { arr.w.x = Math.max(0, Math.min(AN - arr.w.w, arr.wx + dx)); arr.w.y = Math.max(0, Math.min(AL - arr.w.h, arr.wy + dy)); }
+  dibujar(); props();
+});
+$("lienzo").addEventListener("pointerup", () => {
+  if (!arr) return;
+  if (arr.prueba && arr.w.tipo === "button") enviarToque(arr.w, "up");
+  if (!arr.prueba) guardarBorrador();
+  arr = null;
+});
+
+// ── Lista de widgets y código ───────────────────────────────────────────
+const USO = {label: "MCU → HMI: Stone_HMI_Set_Text", button: "HMI → MCU: HMI_get_value(\"button\", …) 1/0", switch: "HMI → MCU: HMI_get_value(\"switch\", …)",
+  slider: "HMI → MCU: HMI_get_value(\"slider\", …)", spin_box: "HMI → MCU: HMI_get_value(\"spin_box\", …)", progress_bar: "MCU → HMI: Stone_HMI_Set_Value",
+  edit: "HMI → MCU: HMI_get_text(…)", chart_view: "MCU → HMI: STONE_push_series"};
+function mapa() {
+  const filas = proy.paginas.flatMap(p => p.widgets.map(w => "<tr><td>" + esc(p.nombre) + "</td><td>" + esc(w.nombre) + "</td><td>" + w.tipo + "</td><td>" + USO[w.tipo] +
+    (w.tipo === "chart_view" ? " (" + (w.series || []).map(s => esc(s.nombre)).join(", ") + ")" : "") + "</td></tr>")).join("");
+  $("mapa").innerHTML = "<tr><th>Página</th><th>Widget</th><th>Tipo</th><th>Cómo se usa</th></tr>" + (filas || "<tr><td colspan=4 class=nota>Aún no hay widgets.</td></tr>");
+}
+function verCodigo() {
+  const ws = todos();
+  const ent = ws.filter(w => ["button", "switch", "slider", "spin_box"].includes(w.tipo));
+  const sal = ws.filter(w => ["label", "progress_bar", "chart_view"].includes(w.tipo));
+  let c = "#include <Controllino.h>\n#include <Stone_HMI_Define.h>\n#include <Procesar_HMI.h>\n\nvoid setup() {\n  Serial.begin(115200);\n  Serial2.begin(115200);   // la HMI: 115200 8N1\n  Stone_HMI_Init();\n}\n\nvoid loop() {\n  Uart_HMI_Data_Receive();\n";
+  for (const w of ent) c += '  long v_' + w.nombre + ' = HMI_get_value("' + w.tipo + '", "' + w.nombre + '");   // -1 si no hay dato nuevo\n';
+  for (const w of sal) {
+    if (w.tipo === "label") c += '  // Stone_HMI_Set_Text("' + w.nombre + '", "texto");\n';
+    else if (w.tipo === "progress_bar") c += '  // Stone_HMI_Set_Value("progress_bar", "' + w.nombre + '", valor);\n';
+    else for (const s of w.series || []) c += '  // STONE_push_series("' + w.nombre + '", "' + s.nombre + '", valor);\n';
+  }
+  c += "  delay(10);\n}";
+  $("codigo").textContent = c; $("codigo").classList.remove("oculto");
+}
+
+// ── Archivo, borrador y carga ───────────────────────────────────────────
+function guardarBorrador() { try { localStorage.setItem("stone_borrador", JSON.stringify(proy)); } catch (_) {} mapa(); }
+function guardar() {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(proy, null, 2)], {type: "application/json"}));
+  a.download = (proy.nombre || "hmi").replace(/[^\w.-]+/g, "_") + ".json"; a.click();
+}
+$("abrir").onchange = async e => {
+  try { proy = JSON.parse(await e.target.files[0].text()); pag = 0; sel = null; props(); dibujar(); guardarBorrador(); } catch (_) { alert("No es un proyecto válido"); }
+  e.target.value = "";
+};
+async function cargarEjemplo() {
+  const r = await fetch("/api/hmi_ejemplo"); if (!r.ok) return;
+  proy = await r.json(); pag = 0; sel = null; props(); dibujar(); guardarBorrador();
+}
+async function cargarEnHMI() {
+  const r = await fetch("/api/hmi_cargar?n=" + $("n").value, {method: "POST", body: JSON.stringify(proy)});
+  const d = await r.json();
+  $("estado-hmi").textContent = d.ok ? "Descargado en la HMI del tablero " + $("n").value + " (reiniciada). Pulsa ▶ Probar." : (d.salida || "Error");
+  if (d.ok) { pag = 0; vivo = null; }
+}
+
+// ── Probar (la pantalla en vivo) ────────────────────────────────────────
+async function sondear() {
+  if (!prueba) return;
+  try {
+    const r = await fetch("/api/hmi?n=" + $("n").value, {cache: "no-store"});
+    vivo = await r.json();
+    if (vivo.proyecto && vivo.pagina !== pag) pag = Math.min(vivo.pagina, proy.paginas.length - 1);
+    if (!arr) dibujar();
+    $("tramas").innerHTML = vivo.log.slice(-14).map(t => '<span class="' + (t.dir.startsWith("MCU") ? "rx" : "tx") + '">' + t.t + " " + t.dir + "</span>  " + esc(t.txt || t.hex)).join("\n") || "(sin tramas todavía)";
+  } catch (_) {}
+}
+function alternarModo() {
+  prueba = !prueba; $("b-modo").textContent = prueba ? "✎ Diseñar" : "▶ Probar"; $("b-modo").classList.toggle("activo", prueba);
+  sel = null; props(); vivo = null; dibujar();
+  $("ayuda").textContent = prueba ? "Modo prueba: toca la pantalla con el ratón como si fuera táctil. Debe estar descargada en la HMI y tu programa corriendo en el Controllino."
+    : "Haz clic en un widget para elegirlo y arrástralo; el cuadro naranja de la esquina cambia su tamaño.";
+}
+function enviarToque(w, ev, v) {
+  let url = "/api/hmi_toque?n=" + $("n").value + "&w=" + encodeURIComponent(w.nombre) + "&ev=" + ev;
+  if (v !== undefined) url += "&v=" + encodeURIComponent(v);
+  fetch(url, {method: "POST"});
+}
+function deslizar(w, e) {
+  const [x, y] = pos(e);
+  const f = w.vertical ? 1 - (y - w.y - w.h * 0.06) / (w.h * 0.88) : (x - w.x - w.w * 0.04) / (w.w * 0.92);
+  const v = Math.round(w.min + Math.max(0, Math.min(1, f)) * (w.max - w.min));
+  if (vivo) vivo.valores[w.nombre] = v;
+  enviarToque(w, "set", v);
+}
+function tocarInicio(w, e) {
+  if (w.tipo === "button") { enviarToque(w, "down"); }
+  else if (w.tipo === "switch") enviarToque(w, "down");
+  else if (w.tipo === "slider") deslizar(w, e);
+  else if (w.tipo === "spin_box") {
+    const dd = e.target.dataset.d;
+    let v = valor(w);
+    if (dd) v += parseFloat(dd) * (w.paso || 1);
+    else { const t = prompt("Valor (" + w.min + "–" + w.max + ")", v); if (t === null) return; v = parseFloat(t); }
+    enviarToque(w, "set", Math.max(w.min, Math.min(w.max, v)));
+  } else if (w.tipo === "edit") {
+    const t = prompt("Texto", texto(w)); if (t !== null) enviarToque(w, "set", t);
+  }
+}
+
+try { const b = localStorage.getItem("stone_borrador"); if (b) proy = JSON.parse(b); } catch (_) {}
+if (!proy.paginas || !proy.paginas.length) proy = {nombre: "L2_supervision", paginas: [{nombre: "home_page", widgets: []}]};
+props(); dibujar();
+setInterval(sondear, 300);
+</script>
+</body>
+</html>

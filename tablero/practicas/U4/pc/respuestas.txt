@@ -1,0 +1,36 @@
+# Taller U4 · hoja de resultados del grupo. «Comprobar mi solución» lee este archivo
+# (~/trabajo/U4/respuestas.txt en el PC del banco). Una cifra o palabra por línea;
+# decimal con punto o con coma. Las tablas de texto y la defensa van en el PDF del grupo.
+grupo =
+
+# Ejercicio 1 / Análisis 1 · sobrecarga H = (Ltrama - Lcarga) / Ltrama x 100 [%]
+H_modbus_rtu =
+H_modbus_tcp =
+H_profinet =
+H_can =
+# bytes que PROFINET RT se ahorra al no llevar IP ni TCP
+ahorro_ip_tcp_B =
+
+# Disección de las capturas del banco (~/trabajo/U4)
+# u4_goose.pcap
+goose_ethertype =
+goose_stnum_disparo =
+goose_primer_reenvio_ms =
+goose_tal_disparo_ms =
+goose_apertura_ms =
+# u4_dnp3.pcap
+dnp3_puntos_analogicos =
+dnp3_indice_evento =
+dnp3_valor_evento =
+# u4_devicenet.pcap
+can_id_bits =
+devicenet_mac_cambia =
+
+# Ejercicio 3 · matriz de decisión del caso asignado (1 a 4), Ec. (U5.1)
+caso =
+ganador =
+S_ganador =
+segundo =
+S_segundo =
+# Análisis 3 · el ganador con determinismo 0,10 (y +0,075 a coste y a ancho de banda)
+ganador_sensibilidad =

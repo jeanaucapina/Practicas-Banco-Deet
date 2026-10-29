@@ -1,0 +1,46 @@
+# Practica L14 - OPC UA con Python (termostato). Tu servidor OPC UA del tablero: una pasarela
+# Modbus TCP <-> OPC UA que publica los registros del ESP32 PLC (L7) como nodos con nombre.
+# El modelo (modelo.json) ya viene hecho; tu script de Python lo usa. Ejecuta tu script en esta carpeta.
+#
+#   cd tablero/run/pc/L14          (= ~/trabajo/L14 del PC del banco)
+#   docker compose -p l14 up -d    # la primera vez instala asyncua (~30 s)
+#   docker restart l14-opcua       # despues de editar modelo.json
+#   docker logs l14-opcua          # errores del modelo (tipo no valido, falta un nodeid...)
+#   docker compose -p l14 down     # al terminar
+#
+#   Endpoint (UaExpert, Ignition, FUXA):   opc.tcp://localhost:4841/banco/
+#   Desde el PC del banco:                 opc.tcp://192.168.1.64:4841/banco/
+services:
+  opcua:
+    image: python:3.12-slim
+    container_name: l14-opcua
+    working_dir: /app
+    command: sh -c "pip install --no-cache-dir asyncua==1.1.5 pymodbus==3.6.9 >/dev/null 2>&1 && python -u servidor_opcua.py"
+    environment:
+      OPCUA_PLC: "192.168.1.10:502"        # el ESP32 PLC de la L7
+    volumes: ["./:/app"]
+    ports: ["127.0.0.1:4841:4841"]
+    networks:
+      l14: {}
+      tab_lan: { ipv4_address: 192.168.1.64 }
+
+  cliente:
+    profiles: ["cliente"]
+    image: python:3.12-slim
+    working_dir: /app
+    entrypoint: ["sh", "-c", "pip install --no-cache-dir asyncua==1.1.5 >/dev/null 2>&1 && exec \"$$@\"", "--"]
+    environment:
+      OPCUA_URL: "opc.tcp://opcua:4841/banco/"
+    volumes: ["./:/app"]
+    networks:
+      l14: {}
+
+networks:
+  l14:
+  # El segmento del banco ya existe (lo crea el tablero); aqui solo nos enganchamos.
+  tab_lan:
+    external: true
+    name: tab_lan
+
+  # Tu script dentro de Docker, si no tienes Python en Windows (pip install asyncua no hace falta):
+  #   docker compose -p l14 run --rm cliente python tu_script.py

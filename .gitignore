@@ -1,0 +1,4 @@
+# Lo que genera el banco en tu PC (tu trabajo, capturas, estado). El 3D web exportado SI va.
+tablero/run/*
+!tablero/run/web/
+tablero/Talleres Guia/

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GSDML de ejemplo de la practica L8 (DEET, Universidad de Cuenca). Describe un
+     IO-Device didactico de la linea LB-3 con un modulo de 40 B de salidas y otro de
+     entradas. NO corresponde a ningun producto comercial: sirve para leer como un
+     controlador conoce, antes de conectarse, que modulos, datos y tiempos de ciclo
+     admite el dispositivo (DeviceIdentity, DAP, ModuleItem, MinDeviceInterval...). -->
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile"
+                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ProfileHeader>
+    <ProfileIdentification>PROFINET Device Profile</ProfileIdentification>
+    <ProfileRevision>1.00</ProfileRevision>
+    <ProfileName>Device Profile for PROFINET Devices</ProfileName>
+    <ProfileSource>PROFIBUS Nutzerorganisation e. V. (PNO)</ProfileSource>
+    <ProfileClassID>Device</ProfileClassID>
+    <ISO15745Reference><ISO15745Part>4</ISO15745Part><ISO15745Edition>1</ISO15745Edition>
+      <ProfileTechnology>GSDML</ProfileTechnology></ISO15745Reference>
+  </ProfileHeader>
+  <ProfileBody>
+    <DeviceIdentity VendorID="0xDEE7" DeviceID="0x0B03">
+      <InfoText TextId="IDT_INFO_Device"/>
+      <VendorName Value="DEET Universidad de Cuenca (didactico)"/>
+    </DeviceIdentity>
+    <DeviceFunction><Family MainFamily="I/O" ProductFamily="LB3-IO"/></DeviceFunction>
+    <ApplicationProcess>
+      <DeviceAccessPointList>
+        <DeviceAccessPointItem ID="DAP1" PhysicalSlots="0..2" ModuleIdentNumber="0x00000001"
+                               MinDeviceInterval="32" ImplementationType="p-net"
+                               DNS_CompatibleName="lb3-io" FixedInSlots="0" ObjectUUID_LocalIndex="1"
+                               RequiredSchemaVersion="V2.4" NumberOfDeviceAccessAR="1"
+                               PNIO_Version="V2.42" CheckDeviceID_Allowed="true" NameOfStationNotTransferable="false">
+          <ModuleInfo><Name TextId="IDT_NAME_DAP"/><InfoText TextId="IDT_INFO_DAP"/>
+            <OrderNumber Value="DEET-LB3-IO-01"/></ModuleInfo>
+          <SubslotList><SubslotItem SubslotNumber="32768" TextId="IDT_NAME_IF"/>
+            <SubslotItem SubslotNumber="32769" TextId="IDT_NAME_P1"/>
+            <SubslotItem SubslotNumber="32770" TextId="IDT_NAME_P2"/></SubslotList>
+          <IOConfigData MaxInputLength="244" MaxOutputLength="244"/>
+          <UseableModules>
+            <ModuleItemRef ModuleItemTarget="IDM_OUT40" AllowedInSlots="1..2"/>
+            <ModuleItemRef ModuleItemTarget="IDM_IN40" AllowedInSlots="1..2"/>
+          </UseableModules>
+          <!-- Ciclos admitidos: SendClock 32 x 31,25 us = 1 ms; ReductionRatio 1..512 -->
+          <InterfaceSubmoduleItem ID="IF" SubmoduleIdentNumber="0x00008000" SubslotNumber="32768"
+                                  TextId="IDT_NAME_IF" SupportedRT_Classes="RT_CLASS_1"
+                                  SupportedProtocols="SNMP;LLDP" DCP_HelloSupported="false">
+            <ApplicationRelations StartupMode="Advanced">
+              <TimingProperties SendClock="32" ReductionRatio="1 2 4 8 16 32 64 128 256 512"/>
+            </ApplicationRelations>
+          </InterfaceSubmoduleItem>
+          <PortSubmoduleItem ID="P1" SubmoduleIdentNumber="0x00008001" SubslotNumber="32769"
+                             TextId="IDT_NAME_P1" MAUTypes="16" PortDeactivationSupported="false"/>
+          <PortSubmoduleItem ID="P2" SubmoduleIdentNumber="0x00008002" SubslotNumber="32770"
+                             TextId="IDT_NAME_P2" MAUTypes="16" PortDeactivationSupported="false"/>
+        </DeviceAccessPointItem>
+      </DeviceAccessPointList>
+      <ModuleList>
+        <ModuleItem ID="IDM_OUT40" ModuleIdentNumber="0x00000040">
+          <ModuleInfo><Name TextId="IDT_NAME_OUT40"/><InfoText TextId="IDT_INFO_OUT40"/></ModuleInfo>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="IDSM_OUT40" SubmoduleIdentNumber="0x00000100">
+              <IOData><Output><DataItem DataType="OctetString" Length="40" TextId="IDT_DATA_OUT"/></Output></IOData>
+              <ModuleInfo><Name TextId="IDT_NAME_OUT40"/></ModuleInfo>
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </ModuleItem>
+        <ModuleItem ID="IDM_IN40" ModuleIdentNumber="0x00000041">
+          <ModuleInfo><Name TextId="IDT_NAME_IN40"/><InfoText TextId="IDT_INFO_IN40"/></ModuleInfo>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="IDSM_IN40" SubmoduleIdentNumber="0x00000101">
+              <IOData><Input><DataItem DataType="OctetString" Length="40" TextId="IDT_DATA_IN"/></Input></IOData>
+              <ModuleInfo><Name TextId="IDT_NAME_IN40"/></ModuleInfo>
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </ModuleItem>
+      </ModuleList>
+      <ExternalTextList>
+        <PrimaryLanguage>
+          <Text TextId="IDT_INFO_Device" Value="IO-Device didactico de la linea LB-3 (practica L8)"/>
+          <Text TextId="IDT_NAME_DAP" Value="LB3-IO DAP"/>
+          <Text TextId="IDT_INFO_DAP" Value="Punto de acceso con 2 puertos 100BASE-TX"/>
+          <Text TextId="IDT_NAME_IF" Value="Interfaz X1"/>
+          <Text TextId="IDT_NAME_P1" Value="Puerto 1"/>
+          <Text TextId="IDT_NAME_P2" Value="Puerto 2"/>
+          <Text TextId="IDT_NAME_OUT40" Value="40 bytes de salidas"/>
+          <Text TextId="IDT_INFO_OUT40" Value="Imagen de proceso de salidas"/>
+          <Text TextId="IDT_NAME_IN40" Value="40 bytes de entradas"/>
+          <Text TextId="IDT_INFO_IN40" Value="Imagen de proceso de entradas"/>
+          <Text TextId="IDT_DATA_OUT" Value="Salidas"/>
+          <Text TextId="IDT_DATA_IN" Value="Entradas"/>
+        </PrimaryLanguage>
+      </ExternalTextList>
+    </ApplicationProcess>
+  </ProfileBody>
+</ISO15745Profile>

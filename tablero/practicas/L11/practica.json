@@ -1,0 +1,130 @@
+{
+  "id": "L11",
+  "titulo": "Pirámide CIM completa: del ERP al campo (ISA-95)",
+  "equipo": "t1.esp32plc",
+  "exige_programa": true,
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "reiniciar": false,
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "pc.eth",
+        "t1.switch.p1"
+      ],
+      [
+        "t1.esp32plc.eth",
+        "t1.switch.p2"
+      ],
+      [
+        "t1.esp32plc.usb",
+        "pc.usb1"
+      ]
+    ],
+    "energia": [
+      [
+        "t1.esp32plc",
+        true
+      ]
+    ],
+    "ordenes": [],
+    "pila": true
+  },
+  "marcar": [
+    "pc.eth",
+    "t1.esp32plc.eth",
+    "t1.switch.p1",
+    "t1.switch.p2"
+  ],
+  "verificacion": [
+    {
+      "txt": "Nivel 1 · el PLC de producción (ESP32, Modbus TCP de la L7) responde en 192.168.1.10:502",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "mbpoll -m tcp -a 1 -t 4 -0 -r 0 -c 8 -1 192.168.1.10 2>&1",
+          "regex": "\\[3\\]:",
+          "max_ms": 9000
+        }
+      ]
+    },
+    {
+      "txt": "Nivel 4 · tu ERP (Odoo) está levantado y su web responde",
+      "hacer": [
+        {
+          "tipo": "docker",
+          "args": [
+            "inspect",
+            "-f",
+            "{{.State.Running}}",
+            "l11-odoo"
+          ],
+          "regex": "true"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://192.168.1.63:8069/web/login 2>&1",
+          "regex": "^(200|303|30\\d)$",
+          "max_ms": 10000
+        }
+      ]
+    },
+    {
+      "txt": "Nivel 3 · tu MES está levantado y en buen estado",
+      "hacer": [
+        {
+          "tipo": "docker",
+          "args": [
+            "inspect",
+            "-f",
+            "{{.State.Running}}",
+            "l11-mes"
+          ],
+          "regex": "true"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "curl -s --max-time 6 http://192.168.1.62:8095/api/salud 2>&1",
+          "regex": "\"ok\":\\s*true",
+          "max_ms": 8000
+        }
+      ]
+    },
+    {
+      "txt": "Integración vertical · el MES ve al PLC por Modbus (el lazo nivel 3 ↔ nivel 1 está cerrado)",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s --max-time 6 http://192.168.1.62:8095/api/salud 2>&1",
+          "regex": "\"plc\":\\s*true",
+          "max_ms": 8000
+        }
+      ]
+    },
+    {
+      "txt": "Orden ejecutada · la orden de fabricación bajó al PLC y el MES cuenta producción real",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s --max-time 8 http://192.168.1.62:8095/api/estado 2>&1",
+          "regex": "\"producidas\":\\s*[1-9]",
+          "max_ms": 12000
+        }
+      ]
+    },
+    {
+      "txt": "Lazo cerrado hacia arriba · el MES calcula el OEE de la orden y lo expone",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s --max-time 6 http://192.168.1.62:8095/api/oee 2>&1",
+          "regex": "\"oee\":\\s*(0?\\.[0-9]+|1(\\.0+)?)",
+          "max_ms": 8000
+        }
+      ]
+    }
+  ]
+}

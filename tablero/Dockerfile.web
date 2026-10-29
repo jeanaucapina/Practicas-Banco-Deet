@@ -1,0 +1,44 @@
+# Tablero 3D en el navegador (export web de Godot) + puente WebSocket a la
+# pasarela. Un solo proceso: websockify sirve los ficheros estaticos y convierte
+# el WebSocket del navegador en el TCP de la pasarela (172.30.99.1:7170).
+#
+#   target "servidor"  solo el servidor; el build web se monta en /srv/web_local
+#                      (lo deja `.\lab.ps1 web` en tablero/run/web)
+#   target "completo"  exporta el proyecto Godot aqui mismo y lo incluye (por
+#                      defecto). La primera vez baja ~1 GB de plantillas; el
+#                      docente puede publicar la imagen y que el alumno haga pull.
+#
+# Contexto adicional "godot": el proyecto Godot (../godot), para no mandar al
+# demonio todo el repo (CAD, entrenamiento RL...).
+
+FROM python:3.12-slim AS servidor
+RUN pip install --no-cache-dir websockify==0.13.0
+COPY web/servir.py /servir.py
+COPY web/servir.sh /servir.sh
+RUN sed -i 's/\r$//' /servir.sh && chmod +x /servir.sh
+EXPOSE 8091
+CMD ["/servir.sh"]
+
+FROM debian:bookworm-slim AS exportar
+ARG GODOT=4.6.3-stable
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl unzip libfontconfig1 libgl1 libxcursor1 libxi6 libxinerama1 libxrandr2 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt
+RUN curl -fsSL -o g.zip https://github.com/godotengine/godot/releases/download/${GODOT}/Godot_v${GODOT}_linux.x86_64.zip \
+    && unzip -q g.zip && mv Godot_v${GODOT}_linux.x86_64 /usr/local/bin/godot && rm g.zip
+# De las plantillas solo hace falta la web sin hilos (no exige COOP/COEP).
+RUN curl -fsSL -o t.tpz https://github.com/godotengine/godot/releases/download/${GODOT}/Godot_v${GODOT}_export_templates.tpz \
+    && V=$(echo ${GODOT} | sed 's/-/./') \
+    && mkdir -p /root/.local/share/godot/export_templates/$V \
+    && unzip -q -j t.tpz templates/web_nothreads_release.zip templates/version.txt \
+         -d /root/.local/share/godot/export_templates/$V \
+    && rm t.tpz
+COPY --from=godot . /p
+RUN mkdir /out \
+    && godot --headless --xr-mode off --path /p --import || true
+RUN godot --headless --xr-mode off --path /p --export-release "Web Tablero" /out/index.html \
+    && test -s /out/index.pck
+
+FROM servidor AS completo
+COPY --from=exportar /out /srv/tablero3d

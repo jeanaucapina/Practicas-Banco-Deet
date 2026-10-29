@@ -1,0 +1,24 @@
+# Practica L9 - Listado L9.3, adaptado al banco virtual: tu broker y tu Node-RED en
+# tu Docker, enchufados al segmento del banco (tab_lan, 192.168.1.0/24) como si
+# fueran el PC de supervision. Desde la carpeta donde lo guardes, en TU computador:
+#     docker compose up -d
+# (el broker y el Node-RED del propio banco ocupan .50 y .60: aqui van .51 y .61)
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto_broker_l9
+    restart: unless-stopped
+    volumes: ["./mosquitto/config:/mosquitto/config", "./mosquitto/data:/mosquitto/data"]
+    networks: { tab_lan: { ipv4_address: 192.168.1.51 } }
+  nodered:
+    image: nodered/node-red:4.0
+    container_name: nodered_l9
+    restart: unless-stopped
+    depends_on: [mosquitto]
+    environment: [TZ=America/Guayaquil]
+    ports: ["127.0.0.1:1882:1880"]
+    volumes: ["nodered_data:/data", "./historico:/historico"]
+    networks: { tab_lan: { ipv4_address: 192.168.1.61 } }
+volumes: { nodered_data: }
+networks:
+  tab_lan: { external: true }

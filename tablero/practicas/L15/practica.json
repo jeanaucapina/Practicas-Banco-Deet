@@ -1,0 +1,212 @@
+{
+  "id": "L15",
+  "titulo": "OPC UA · control ON/OFF con histéresis y migración de NodeIds",
+  "equipo": "t1.esp32plc",
+  "exige_programa": false,
+  "lenguajes": [],
+  "enunciado": "enunciado.md",
+  "reiniciar": false,
+  "montaje": {
+    "limpiar": true,
+    "cables": [],
+    "energia": [
+      [
+        "t1.esp32plc",
+        true
+      ],
+      [
+        "t1.switch",
+        true
+      ]
+    ],
+    "cargar_plc": [
+      [
+        "t1.esp32plc",
+        "_comun/plc_modbus_tcp.ino"
+      ]
+    ],
+    "ordenes": [],
+    "pila": true,
+    "pc_actualizar": [
+      "servidor_opcua.py",
+      "docker-compose.yml"
+    ]
+  },
+  "marcar": [
+    "pc.eth",
+    "t1.switch.p1",
+    "t1.esp32plc.eth",
+    "t1.switch.p2",
+    "t1.esp32plc.pot.senal",
+    "t1.esp32plc.jack.AI2",
+    "t1.esp32plc.pot.vcc",
+    "t1.esp32plc.pot.gnd",
+    "t1.esp32plc.jack.5V",
+    "t1.esp32plc.jack.GND"
+  ],
+  "verificacion": [
+    {
+      "txt": "El PLC (ESP32, Modbus TCP de la L7) responde en 192.168.1.10:502",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "mbpoll -m tcp -a 1 -t 4 -0 -r 0 -c 8 -1 192.168.1.10 2>&1",
+          "regex": "\\[3\\]:",
+          "max_ms": 9000
+        }
+      ]
+    },
+    {
+      "txt": "Tu servidor OPC UA está levantado y escucha en 192.168.1.64:4841",
+      "hacer": [
+        {
+          "tipo": "docker",
+          "args": [
+            "inspect",
+            "-f",
+            "{{.State.Running}}",
+            "l15-opcua"
+          ],
+          "regex": "true"
+        },
+        {
+          "tipo": "pc",
+          "cmd": "nc -z -w 3 192.168.1.64 4841 && echo ABIERTO",
+          "regex": "ABIERTO",
+          "max_ms": 8000
+        }
+      ]
+    },
+    {
+      "txt": "Parte II · el servidor pasó a NodeIds NUMÉRICOS (ns=2;i=1011…), como una planta real",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s --max-time 6 http://192.168.1.64:8096/api/estado 2>&1",
+          "regex": "\"nodeid\":\\s*\"i=1011\"",
+          "max_ms": 8000
+        }
+      ]
+    },
+    {
+      "txt": "Suscripción · tu controlador se suscribió al potenciómetro (no pregunta: el servidor avisa)",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s --max-time 6 http://192.168.1.64:8096/api/estado 2>&1",
+          "regex": "\"suscripciones_max\":\\s*[1-9]",
+          "max_ms": 8000
+        }
+      ]
+    },
+    {
+      "txt": "Histéresis · potenciómetro > 700: tu script cierra REL-A",
+      "hacer": [
+        {
+          "tipo": "analogica",
+          "equipo": "t1.esp32plc",
+          "i": 2,
+          "v": 3604
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.esp32plc",
+          "rele": {
+            "0": 1
+          },
+          "max_ms": 6000
+        }
+      ]
+    },
+    {
+      "txt": "Histéresis · entre 500 y 700 (600) mantiene REL-A cerrado",
+      "hacer": [
+        {
+          "tipo": "analogica",
+          "equipo": "t1.esp32plc",
+          "i": 2,
+          "v": 2402
+        },
+        {
+          "tipo": "mantener",
+          "equipo": "t1.esp32plc",
+          "rele": {
+            "0": 1
+          },
+          "ms": 3000
+        }
+      ]
+    },
+    {
+      "txt": "Histéresis · potenciómetro < 500: lo abre",
+      "hacer": [
+        {
+          "tipo": "analogica",
+          "equipo": "t1.esp32plc",
+          "i": 2,
+          "v": 1201
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.esp32plc",
+          "rele": {
+            "0": 0
+          },
+          "max_ms": 6000
+        }
+      ]
+    },
+    {
+      "txt": "Histéresis · de nuevo entre 500 y 700 (subiendo desde abajo) lo mantiene abierto",
+      "hacer": [
+        {
+          "tipo": "analogica",
+          "equipo": "t1.esp32plc",
+          "i": 2,
+          "v": 2402
+        },
+        {
+          "tipo": "mantener",
+          "equipo": "t1.esp32plc",
+          "rele": {
+            "0": 0
+          },
+          "ms": 3000
+        }
+      ]
+    },
+    {
+      "txt": "Escrituras · el control llegó al PLC por OPC UA",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s --max-time 6 http://192.168.1.64:8096/api/estado 2>&1",
+          "regex": "\"escrituras\":\\s*[2-9]|\"escrituras\":\\s*[1-9][0-9]",
+          "max_ms": 8000
+        }
+      ]
+    }
+  ],
+  "guia": [
+    [
+      "pc.eth",
+      "t1.switch.p1"
+    ],
+    [
+      "t1.esp32plc.eth",
+      "t1.switch.p2"
+    ],
+    [
+      "t1.esp32plc.pot.vcc",
+      "t1.esp32plc.jack.5V"
+    ],
+    [
+      "t1.esp32plc.pot.gnd",
+      "t1.esp32plc.jack.GND"
+    ],
+    [
+      "t1.esp32plc.pot.senal",
+      "t1.esp32plc.jack.AI2"
+    ]
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "id": "U6",
+  "titulo": "Taller: seguridad de redes industriales (IEC 62443)",
+  "equipo": "t1.esp32plc",
+  "exige_programa": true,
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "reiniciar": false,
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "pc.eth",
+        "t1.switch.p1"
+      ],
+      [
+        "t1.esp32plc.eth",
+        "t1.switch.p2"
+      ],
+      [
+        "t1.esp32plc.usb",
+        "pc.usb1"
+      ]
+    ],
+    "energia": [
+      [
+        "t1.esp32plc",
+        true
+      ]
+    ],
+    "ordenes": [],
+    "pila": true
+  },
+  "marcar": [
+    "pc.eth",
+    "t1.esp32plc.eth",
+    "t1.switch.p1",
+    "t1.switch.p2"
+  ],
+  "verificacion": [
+    {
+      "txt": "Base · el servidor Modbus TCP de la L7 (la victima) responde en 192.168.1.10:502",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "mbpoll -m tcp -a 1 -t 4 -0 -r 0 -c 8 -1 192.168.1.10 2>&1",
+          "regex": "\\[7\\]:",
+          "max_ms": 9000
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · tu broker endurecido (u6-broker) está levantado",
+      "hacer": [
+        {
+          "tipo": "docker",
+          "args": [
+            "inspect",
+            "-f",
+            "{{.State.Running}}",
+            "u6-broker"
+          ],
+          "regex": "true"
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · FR1 (SR 1.2) · la conexión ANÓNIMA al broker es rechazada",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cd ~/trabajo/U6 && timeout 6 mosquitto_pub --cafile server.crt --insecure -h 192.168.1.52 -p 8883 -t planta/sensor/x -m 1 2>&1; true",
+          "regex": "not authoris|refus|rechaz|Connection Refused",
+          "max_ms": 8000
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · FR4 (SR 4.1) · el operador publica por TLS (8883) con credenciales",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cd ~/trabajo/U6 && timeout 6 mosquitto_pub --cafile server.crt --insecure -h 192.168.1.52 -p 8883 -u operador -P banco -t planta/sensor/t -m 25 >/dev/null 2>&1; echo RC=$?",
+          "regex": "RC=0",
+          "max_ms": 8000
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · FR2 (SR 2.1) · la ACL deniega al rol «lector» publicar un mando (FR6: queda en el log)",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cd ~/trabajo/U6 && timeout 6 mosquitto_pub --cafile server.crt --insecure -h 192.168.1.52 -p 8883 -u lector -P banco -t planta/actuador/rele -m intento >/dev/null 2>&1; echo RC=$?",
+          "regex": "RC=",
+          "max_ms": 9000
+        },
+        {
+          "tipo": "docker",
+          "args": [
+            "logs",
+            "--since",
+            "20s",
+            "u6-broker"
+          ],
+          "regex": "Denied PUBLISH[\\s\\S]*actuador",
+          "max_ms": 4000
+        }
+      ]
+    },
+    {
+      "txt": "Parte II · FR3 (SR 3.1/3.8) · tu filtro de frescura acepta lo legítimo y descarta el replay",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "cd ~/trabajo/U6 && python3 revisar_frescura.py",
+          "regex": "^OK",
+          "max_ms": 8000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · FR7 · en reposo el PLC responde rápido (línea base Tc(0))",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s -X POST 'http://172.30.99.6:8090/api/saturar?nivel=0' >/dev/null 2>&1; sleep 2; cd ~/trabajo/U6 && python3 operador_ciclo.py --n 30",
+          "regex": "Tc mediano = [01]([.,]\\d+)? ms",
+          "max_ms": 15000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · FR7 · bajo saturación del 100 % el tiempo de ciclo se degrada (supera el periodo de sondeo de 100 ms)",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s -X POST 'http://172.30.99.6:8090/api/saturar?nivel=100&seg=25' >/dev/null 2>&1; sleep 3; cd ~/trabajo/U6 && python3 operador_ciclo.py --n 40",
+          "regex": "Tc mediano = (1\\d\\d|[2-9]\\d)[.,]",
+          "max_ms": 20000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · hoja · el factor de degradación F = Tc(100 %)/Tc(0)",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s -X POST 'http://172.30.99.6:8090/api/saturar?nivel=0' >/dev/null 2>&1; cat ~/trabajo/U6/respuestas.txt",
+          "regex": "(?m)^F\\s*=\\s*([2-9]|[1-9]\\d+)([.,]\\d+)?\\s*$"
+        }
+      ]
+    }
+  ]
+}

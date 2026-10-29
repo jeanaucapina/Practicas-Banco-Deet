@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laboratorio DEET</title>
+<style>
+  :root {
+    --fondo: #f3f4f1; --tarjeta: #fdfdfb; --borde: #dcdfd8; --texto: #1c2321; --suave: #5b6560;
+    --acento: #1f7f74; --acento-f: #d6efe9; --naranja: #c2571a; --naranja-f: #fbe6d4;
+    --rojo: #b3261e; --rojo-f: #f9dedc; --led-off: #c9cec8; --led-on: #f2b705; --verde: #2e9d4f;
+    --azul: #2f62b0; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #121614; --tarjeta: #1b201e; --borde: #2c3330; --texto: #e6ebe8; --suave: #9aa6a0;
+      --acento: #5fd0c2; --acento-f: #183330; --naranja: #f2994a; --naranja-f: #3a2818;
+      --rojo: #f2867c; --rojo-f: #3b1d1b; --led-off: #39403d; --led-on: #ffd43b; --verde: #5ad17a; --azul: #7fa8f0;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); display: flex; flex-direction: column;
+         font: 15px/1.45 system-ui, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--tarjeta); border-bottom: 1px solid var(--borde); padding: 8px 16px;
+           display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  header h1 { font-size: 17px; margin: 0 8px 0 0; }
+  header h1 span { color: var(--suave); font-weight: 500; }
+  header a { color: var(--acento); font-size: 13px; text-decoration: none; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--suave); }
+  .punto { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); flex: none; }
+  .punto.ok { background: var(--verde); } .punto.mal { background: var(--rojo); }
+  .espacio { flex: 1; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 12px; padding: 12px 16px 16px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; grid-auto-rows: minmax(420px, auto); overflow: auto; } }
+  .visor { position: relative; background: #0b0f14; border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; min-height: 380px; }
+  .visor iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .ayuda3d { position: absolute; right: 10px; bottom: 10px; z-index: 2; font-size: 12px; color: #cfd8e3; background: rgba(8,12,18,.65);
+             padding: 4px 9px; border-radius: 6px; pointer-events: none; }
+  .vistas { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; z-index: 2; }
+  .editor { display: none; position: absolute; inset: 0; z-index: 3; background: #000; flex-direction: column; }
+  .editor.abierto { display: flex; }
+  .editor .barra { background: var(--tarjeta); padding: 6px 10px; display: flex; gap: 10px; align-items: center;
+                   border-bottom: 1px solid var(--borde); font-size: 13px; }
+  .editor iframe { position: static; flex: 1; width: 100%; border: 0; }
+  .cajon { overflow: auto; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px 14px; }
+  .tarjeta h2 { font-size: 14px; margin: 0 0 8px; }
+  .etq { font-size: 12px; color: var(--suave); }
+  button { font: inherit; font-size: 13px; background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde);
+           border-radius: 8px; padding: 6px 11px; cursor: pointer; }
+  button:hover { border-color: var(--acento); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.prim { background: var(--acento); color: var(--tarjeta); border-color: var(--acento); font-weight: 600; }
+  button.grande { width: 100%; padding: 11px 12px; font-size: 14px; text-align: left; display: block; }
+  button.grande small { display: block; font-weight: 400; opacity: .85; font-size: 12px; margin-top: 1px; }
+  button.activo { background: var(--azul); color: #fff; border-color: var(--azul); }
+  .sel { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .quien { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; }
+  .pill { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--acento-f); color: var(--acento); }
+  .pill.naranja { background: var(--naranja-f); color: var(--naranja); }
+  .pill.gris { background: var(--fondo); color: var(--suave); border: 1px solid var(--borde); }
+  .leds { display: flex; flex-wrap: wrap; gap: 3px; }
+  .led { width: 20px; height: 20px; border-radius: 5px; background: var(--led-off); font: 9px/20px var(--mono);
+         text-align: center; color: var(--suave); }
+  .led.on { background: var(--led-on); color: #3a2a00; box-shadow: 0 0 7px var(--led-on); }
+  .led.in.on { background: var(--azul); color: #fff; box-shadow: none; }
+  .zona { border: 2px dashed var(--borde); border-radius: 10px; padding: 12px; text-align: center; color: var(--suave);
+          font-size: 13px; cursor: pointer; margin-top: 8px; }
+  .zona.sobre { border-color: var(--acento); background: var(--acento-f); color: var(--acento); }
+  .acciones { display: flex; flex-direction: column; gap: 8px; }
+  pre { font: 12.5px/1.45 var(--mono); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px;
+        padding: 8px; margin: 6px 0 0; max-height: 200px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  .error { border-left: 3px solid var(--rojo); background: var(--rojo-f); border-radius: 6px; padding: 6px 9px; margin-top: 6px;
+           font-size: 13px; }
+  .error b { font-family: var(--mono); }
+  .ok { border-left: 3px solid var(--verde); background: var(--acento-f); border-radius: 6px; padding: 6px 9px; margin-top: 6px; font-size: 13px; }
+  .oculto { display: none !important; }
+  .docente-sol { margin-top: 10px; padding: 8px 10px; border: 1px dashed var(--naranja); border-radius: 8px;
+                 background: var(--naranja-f); font-size: 13px; }
+  .md h3 { font-size: 15px; margin: 8px 0 4px; } .md h4 { font-size: 13.5px; margin: 8px 0 3px; color: var(--suave); }
+  .md p, .md ul { margin: 4px 0; font-size: 13.5px; } .md ul { padding-left: 20px; }
+  .md table { border-collapse: collapse; font-size: 13px; margin: 4px 0; } .md td, .md th { border: 1px solid var(--borde); padding: 2px 8px; }
+  .md blockquote { margin: 4px 0; padding: 4px 9px; border-left: 3px solid var(--naranja); background: var(--naranja-f); font-size: 12.5px; }
+  .md code { font: 12px var(--mono); background: var(--fondo); padding: 0 4px; border-radius: 4px; }
+  .pasos { list-style: none; padding: 0; margin: 8px 0 0; font-size: 13px; }
+  .pasos li { padding: 4px 0 4px 24px; position: relative; border-bottom: 1px solid var(--borde); }
+  .pasos li::before { content: "·"; position: absolute; left: 6px; color: var(--suave); }
+  .pasos li.ok::before { content: "✔"; color: var(--verde); } .pasos li.no::before { content: "✘"; color: var(--rojo); }
+  .pasos li.ahora::before { content: "…"; color: var(--azul); }
+  .pasos .motivo { display: block; color: var(--rojo); font-size: 12px; }
+  .pie { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .nota { font-size: 12.5px; color: var(--suave); }
+  a.boton { display: block; text-decoration: none; background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde);
+            border-radius: 8px; padding: 11px 12px; font-size: 14px; }
+  a.boton.prim { background: var(--acento); color: var(--tarjeta); border-color: var(--acento); font-weight: 600; }
+  a.boton small { display: block; font-weight: 400; opacity: .85; font-size: 12px; margin-top: 1px; }
+  select { font: inherit; font-size: 13px; background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 8px; padding: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Laboratorio DEET <span>· Informática Industrial</span></h1>
+  <span class="chip"><span class="punto" id="p-pasarela"></span><span id="t-pasarela">pasarela</span></span>
+  <span class="chip"><span class="punto" id="p-equipos"></span><span id="t-equipos">equipos</span></span>
+  <span class="chip"><span class="punto" id="p-3d"></span><span>tablero 3D</span></span>
+  <span class="espacio"></span>
+  <button id="b-docente" class="oculto" onclick="docente()" title="Ver y subir las soluciones de las prácticas">Modo docente</button>
+  <a href="/">Panel técnico</a>
+</header>
+
+<main>
+  <section class="visor" id="visor">
+    <iframe id="f3d" title="Tablero 3D" allow="fullscreen"></iframe>
+    <div class="vistas">
+      <button onclick="vista('')">Vista general</button>
+      <button onclick="vista('t1')">Tablero 1</button>
+      <button onclick="vista('t2')">Tablero 2</button>
+    </div>
+    <div class="ayuda3d">W A S D moverte · Q E bajar/subir · clic derecho girar · rueda zoom · 1 2 0 vistas</div>
+    <div class="editor" id="editor">
+      <div class="barra">
+        <button onclick="cerrarEditor()">← Volver al tablero</button>
+        <span id="editor-info">Dibuja, guarda y pulsa la flecha naranja ↓ <b>Generate program for OpenPLC Runtime</b>: se carga solo.</span>
+      </div>
+      <iframe id="feditor" title="Editor de escalera"></iframe>
+    </div>
+  </section>
+
+  <aside class="cajon">
+    <div class="tarjeta" id="t-practica">
+      <h2>Práctica</h2>
+      <select id="prac" style="width:100%" onchange="elegirPractica(this.value)"></select>
+      <div id="prac-info" style="margin-top:8px"></div>
+    </div>
+
+    <div class="tarjeta">
+      <details id="d-espacio" ontoggle="if (this.open) espacio(true)">
+        <summary class="nota">Espacio en disco · imágenes extra de las prácticas</summary>
+        <div class="nota" style="margin:6px 0">Las prácticas con servidor propio (Odoo, ChirpStack, FUXA…) bajan sus imágenes la primera vez que las usas.
+          Aquí las bajas por adelantado (mejor con buena red) o las sueltas al terminar. Tus datos no se borran.</div>
+        <div id="espacio-lista"></div>
+        <div class="pie"><button onclick="limpiarCache()" title="Residuo de construir las imágenes del banco">Limpiar caché de construcción</button>
+          <span class="etq" id="espacio-cache"></span></div>
+        <div class="etq" id="espacio-res"></div>
+      </details>
+    </div>
+
+    <div class="tarjeta">
+      <h2>1 · Elige un equipo <span class="etq">(o haz clic en él, en el tablero 3D)</span></h2>
+      <div class="sel" id="sel"></div>
+    </div>
+
+    <div class="tarjeta" id="t-equipo">
+      <h2 id="eq-titulo">—</h2>
+      <div class="quien" id="eq-quien"></div>
+      <div id="eq-wifi" class="oculto" style="margin-bottom:8px">
+        <button onclick="alternarWifi()" id="b-wifi">WiFi</button>
+        <select id="posicion" onchange="posicionRadio(this.value)" title="Dónde está el banco respecto al punto de acceso (cambia el RSSI)">
+          <option value="-48">Posición A · línea de vista al AP</option>
+          <option value="-73">Posición B · tras una pared</option>
+        </select>
+        <span class="etq" id="wifi-ip"></span>
+      </div>
+      <div id="eq-lora" class="oculto" style="margin-bottom:8px">
+        <select id="posicion-lora" onchange="posicionLora(this.value)" title="Dónde está el nodo LoRa en el edificio (guía L10, Parte IV)">
+          <option value="P1">LoRa en P1 · laboratorio, línea de vista (≈5 m)</option>
+          <option value="P2">LoRa en P2 · otro piso, dos losas (≈40 m)</option>
+          <option value="P3">LoRa en P3 · exterior, sin línea de vista (≈300 m)</option>
+        </select>
+        <div class="etq" id="lora-etq" style="margin-top:4px"></div>
+        <button id="b-reponer" class="oculto" onclick="reponerLora()" style="margin-top:4px">Cambiar el módulo RN2903 averiado</button>
+      </div>
+      <div class="etq" id="eq-leds-etq">Salidas</div>
+      <div class="leds" id="eq-leds"></div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>2 · Programarlo</h2>
+      <div class="acciones">
+        <button class="grande prim" id="b-escalera" onclick="programarEscalera()">Programar en escalera / bloques
+          <small>Abre el editor gráfico (como KOP/FUP de TIA). Al terminar, se carga solo.</small></button>
+        <button class="grande" onclick="document.getElementById('archivo').click()">Subir un programa .ino
+          <small>Elige el archivo de tu equipo (Arduino IDE / VS Code).</small></button>
+        <input type="file" id="archivo" accept=".ino" class="oculto">
+      </div>
+      <div class="zona" id="zona">…o suelta aquí tu <b>.ino</b></div>
+      <div id="resultado"></div>
+    </div>
+
+    <div class="tarjeta" id="t-serie">
+      <h2>3 · Monitor serie <span class="etq" id="serie-etq"></span></h2>
+      <pre id="serie" style="min-height:90px">(sin salida)</pre>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="limpiarSerie()">Limpiar</button>
+        <button onclick="fabrica()">Volver al programa de fábrica</button>
+      </div>
+    </div>
+    <div class="tarjeta">
+      <h2>4 · Analizar el tráfico</h2>
+      <div class="etq" style="margin-bottom:6px">Red a observar</div>
+      <select id="red" style="width:100%;margin-bottom:8px">
+        <option value="tab-lan">LAN 192.168.1.0/24 (Ethernet y WiFi: Modbus TCP, MQTT, S7, PROFINET)</option>
+        <option value="tab-485">Bus RS-485</option>
+      </select>
+      <div class="acciones">
+        <a class="boton grande prim" id="b-wireshark" href="#">Abrir Wireshark en vivo
+          <small>Se abre en este PC con la captura ya lista. La primera vez el navegador pide permiso.</small></a>
+        <button class="grande" id="b-pcap" onclick="grabar()">Grabar 30 s y descargar .pcap
+          <small>Para el informe: se abre con Wireshark.</small></button>
+      </div>
+      <div id="cap-info" class="etq" style="margin-top:6px"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>5 · El PC del banco <span class="etq">192.168.1.100 · enchúfalo al switch en el 3D</span></h2>
+      <div class="acciones">
+        <button class="grande prim" onclick="escritorioPC()">Escritorio del PC
+          <small>Linux con OpenPLC Editor, Wireshark, QModMaster, terminal y navegador, como el PC del laboratorio.</small></button>
+        <button class="grande" onclick="terminalPC()">Terminal del PC
+          <small>ping, arp, nc, mbpoll, python3 + pymodbus, mosquitto_sub… y /dev/ttyUSB0 (USB-RS485).</small></button>
+        <button class="grande" onclick="window.open('http://' + host + ':7682/', '_blank')">Terminal del atacante
+          <small>192.168.1.101 con nmap, tshark, iperf3, scapy… Solo contra tu propio banco (taller U6).</small></button>
+      </div>
+    </div>
+    <div class="tarjeta">
+      <h2>6 · Otras herramientas</h2>
+      <div class="acciones">
+        <button class="grande" onclick="nodered('')">Node-RED <small>Editor de flujos para MQTT y dashboards (práctica L9). Se enciende al pulsar.</small></button>
+        <button class="grande" onclick="disenadorHMI()">Diseñador de HMI <small>Diseña la pantalla táctil y pruébala contra tu programa (práctica L2).</small></button>
+        <button class="grande" onclick="nodered('ui')">Dashboard de Node-RED <small>El panel con tus indicadores y botones.</small></button>
+        <button class="grande" onclick="window.open('/lora', '_blank')">Pasarela LoRaWAN <small>Su web local: plan de frecuencias, servidor y tramas con RSSI, SNR y tiempo en el aire (práctica L10).</small></button>
+        <button class="grande" onclick="window.open('http://' + host + ':8089/', '_blank')">ChirpStack (tu Docker) <small>Servidor de red de la práctica L10, si lo levantaste con su docker-compose (admin / admin).</small></button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+const EQUIPOS = [
+  {id: "t1.controllino", nombre: "Controllino 1", tipo: "controllino", n: 1},
+  {id: "t2.controllino", nombre: "Controllino 2", tipo: "controllino", n: 2},
+  {id: "t1.esp32plc", nombre: "ESP32 PLC 1", tipo: "esp32plc", n: 1},
+  {id: "t2.esp32plc", nombre: "ESP32 PLC 2", tipo: "esp32plc", n: 2},
+];
+const MODOS = {0: "ESCLAVO", 1: "ESPEJO", 2: "SECUENCIA", 3: "MAESTRO 485", 4: "MAESTRO TCP", 9: "PROGRAMA"};
+const $ = id => document.getElementById(id);
+const host = location.hostname || "localhost";
+let sel = EQUIPOS[0].id;
+let ultimo = null;
+let serieTxt = "";
+let enEditor = false;
+
+$("f3d").src = "http://" + host + ":8091/";
+$("f3d").addEventListener("load", () => $("p-3d").className = "punto ok");
+
+// ── Selección de equipo ─────────────────────────────────────────────────
+function pintarSel() {
+  $("sel").innerHTML = "";
+  for (const e of EQUIPOS) {
+    const b = document.createElement("button");
+    b.textContent = e.nombre;
+    if (e.id === sel) b.className = "activo";
+    b.onclick = () => elegir(e.id);
+    $("sel").appendChild(b);
+  }
+}
+function elegir(id) {
+  sel = id; serieTxt = ""; $("serie").textContent = "(sin salida)"; $("resultado").innerHTML = "";
+  pintarSel(); pintarEquipo();
+  const e = EQUIPOS.find(x => x.id === id);
+  $("b-escalera").classList.toggle("oculto", e.tipo !== "controllino");
+}
+window.addEventListener("message", ev => {
+  const d = ev.data;
+  if (d && d.t === "equipo" && EQUIPOS.some(e => e.id === d.id)) elegir(d.id);
+  if (d && d.t === "listo" && practica) $("f3d").contentWindow.postMessage({t: "marcar", ids: practica.marcar || [], guia: practica.guia || []}, "*");
+  if (d && d.t === "listo") {      // los hilos de los modulos son solo del 3D: se reponen tras recargar la pagina
+    try {
+      const g = JSON.parse(localStorage.getItem("cab_modulos") || "null");
+      if (g && g.pares) setTimeout(() => $("f3d").contentWindow.postMessage({t: "cablear_modulos", pares: g.pares}, "*"), 1500);
+    } catch (_) {}
+  }
+});
+function vista(q) { $("f3d").contentWindow.postMessage({t: "vista", equipo: q}, "*"); }
+
+// ── Estado ──────────────────────────────────────────────────────────────
+function quienManda(e) {
+  const c = ultimo && ultimo.contenedores || {};
+  const eq = ultimo && ultimo.pasarela && ultimo.pasarela.equipos[e.id];
+  if (e.tipo === "controllino" && (c["tab" + e.n + "-openplc"] || {}).estado === "running")
+    return ["OpenPLC en RUN (tu escalera)", ""];
+  if (!eq) return ["sin datos", "gris"];
+  if (eq.modo === 9) return ["Tu programa: " + (eq.programa || "?"), "naranja"];
+  return ["Programa de fábrica (" + (MODOS[eq.modo] || "modo " + eq.modo) + ")", "gris"];
+}
+function pintarEquipo() {
+  const e = EQUIPOS.find(x => x.id === sel);
+  $("eq-titulo").textContent = e.nombre;
+  const [txt, cls] = quienManda(e);
+  $("eq-quien").innerHTML = '<span class="pill ' + cls + '">' + txt + "</span>";
+  const eq = ultimo && ultimo.pasarela && ultimo.pasarela.equipos[sel];
+  const cont = $("eq-leds");
+  $("eq-wifi").classList.toggle("oculto", e.tipo !== "esp32plc");
+  $("eq-lora").classList.toggle("oculto", e.tipo !== "esp32plc");
+  if (eq && eq.lora) {
+    const l = eq.lora;
+    if (document.activeElement !== $("posicion-lora")) $("posicion-lora").value = l.pos || "P1";
+    const partes = [l.antena ? "antena de 915 MHz puesta" : "SIN ANTENA: atorníllala en el slot LORA (tablero 3D) antes de emitir"];
+    if (l.danado) partes.push("módulo AVERIADO (emitió sin antena)");
+    if (l.unido) partes.push("unido · DevAddr " + l.devaddr + " · DR" + l.dr + " · FCnt " + l.fcnt);
+    else if (l.union) partes.push("última unión " + l.union.hora + ": " + l.union.resultado);
+    if (l.canales) partes.push("canales " + l.canales);
+    $("lora-etq").textContent = "LoRa: " + partes.join(" · ");
+    $("lora-etq").style.color = (!l.antena || l.danado) ? "var(--rojo)" : "";
+    $("b-reponer").classList.toggle("oculto", !l.danado);
+  }
+  if (eq && e.tipo === "esp32plc") {
+    $("b-wifi").textContent = eq.wifi ? "WiFi encendida (apagar)" : "WiFi apagada (encender)";
+    $("b-wifi").className = eq.wifi ? "activo" : "";
+    $("wifi-ip").textContent = eq.wifi && eq.ip ? eq.ip : "";
+  }
+  if (!eq) { cont.innerHTML = ""; return; }
+  const salidas = e.tipo === "controllino" ? eq.do : eq.do.slice(0, 4).concat(eq.rele.slice(0, 1));
+  const nombres = e.tipo === "controllino" ? salidas.map((_, i) => "D" + i) : ["Q0", "Q1", "Q2", "Q3", "R0"];
+  $("eq-leds-etq").textContent = e.tipo === "controllino" ? "Salidas D0–D23" : "Salidas Q0.0–Q0.3 y relé R0";
+  cont.innerHTML = salidas.map((v, i) =>
+    '<div class="led' + (v ? " on" : "") + '" title="' + nombres[i] + '">' + (e.tipo === "controllino" ? i : "") + "</div>").join("");
+}
+async function sondear() {
+  try {
+    const r = await fetch("/api/estado", {cache: "no-store"});
+    ultimo = await r.json();
+    $("p-pasarela").className = "punto " + (ultimo.pasarela_ok ? "ok" : "mal");
+    $("t-pasarela").textContent = ultimo.pasarela_ok ? "pasarela" : "pasarela sin conexión";
+    const c = ultimo.contenedores || {};
+    const ids = ["tab1-controllino", "tab2-controllino", "tab1-esp32plc", "tab2-esp32plc"];
+    const vivos = ids.filter(i => (c[i] || {}).estado === "running").length;
+    $("p-equipos").className = "punto " + (vivos === 4 ? "ok" : vivos ? "" : "mal");
+    $("t-equipos").textContent = "equipos " + vivos + "/4";
+    pintarEquipo();
+  } catch (e) {
+    $("p-pasarela").className = "punto mal";
+  }
+}
+
+// ── Subir .ino ──────────────────────────────────────────────────────────
+function mostrarSalida(ok, salida) {
+  let html = "";
+  const reg = /^(.*?):(\d+):(\d+): (?:fatal )?(error|warning): (.*)$/gm;
+  let m, hayError = false;
+  while ((m = reg.exec(salida)) !== null) {
+    if (m[4] !== "error") continue;
+    hayError = true;
+    const f = m[1].split(/[\\/]/).pop();
+    html += '<div class="error">línea <b>' + m[2] + "</b> de " + esc(f) + ": " + esc(m[5]) + "</div>";
+  }
+  if (ok) html = '<div class="ok">Subido y en marcha. Mira el monitor serie y el tablero 3D.</div>';
+  else if (!hayError) html = '<div class="error">' + esc(salida.split("\n").slice(-4).join(" ")) + "</div>";
+  else html += '<div class="etq" style="margin-top:6px">El equipo sigue con el programa anterior.</div>';
+  html += '<details><summary class="etq">Salida completa</summary><pre>' + esc(salida) + "</pre></details>";
+  $("resultado").innerHTML = html;
+}
+function esc(t) { return String(t).replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c])); }
+
+async function subirArchivo(f) {
+  if (!f) return;
+  if (!/\.ino$/i.test(f.name)) { mostrarSalida(false, "Hace falta un archivo .ino"); return; }
+  $("resultado").innerHTML = '<div class="etq">Compilando y subiendo…</div>';
+  await fetch("/api/preparar?equipo=" + sel + "&modo=ino", {method: "POST"});
+  const r = await fetch("/api/subir?equipo=" + sel + "&nombre=" + encodeURIComponent(f.name), {method: "POST", body: await f.arrayBuffer()});
+  const d = await r.json();
+  mostrarSalida(d.ok, d.salida || "");
+  if (d.ok) limpiarSerie();
+}
+$("archivo").onchange = e => { subirArchivo(e.target.files[0]); e.target.value = ""; };
+const zona = $("zona");
+zona.onclick = () => $("archivo").click();
+zona.ondragover = e => { e.preventDefault(); zona.classList.add("sobre"); };
+zona.ondragleave = () => zona.classList.remove("sobre");
+zona.ondrop = e => { e.preventDefault(); zona.classList.remove("sobre"); subirArchivo(e.dataTransfer.files[0]); };
+
+async function fabrica() {
+  const r = await fetch("/api/fabrica?equipo=" + sel, {method: "POST"});
+  const d = await r.json();
+  $("resultado").innerHTML = '<div class="ok">' + esc(d.salida) + "</div>";
+}
+
+// ── Escalera ────────────────────────────────────────────────────────────
+async function programarEscalera() {
+  const e = EQUIPOS.find(x => x.id === sel);
+  $("resultado").innerHTML = '<div class="etq">Encendiendo el editor y la CPU de OpenPLC…</div>';
+  const r = await fetch("/api/preparar?equipo=" + sel + "&modo=openplc", {method: "POST"});
+  const d = await r.json();
+  if (!d.ok) { mostrarSalida(false, d.salida || ""); return; }
+  $("resultado").innerHTML = '<div class="ok">' + esc(d.salida) + "</div>";
+  $("editor-info").innerHTML = "Dibuja, guarda y pulsa la flecha naranja ↓ <b>Generate program for OpenPLC Runtime</b>: se carga solo en el " + e.nombre + ".";
+  abrirEditor();
+}
+function abrirEditor(url) {
+  // El editor tarda unos segundos en estar listo tras encenderlo.
+  url = url || "http://" + host + ":6080/vnc.html?autoconnect=1&resize=remote&reconnect=1";
+  if ($("feditor").getAttribute("src") !== url) $("feditor").src = url;
+  $("editor").classList.add("abierto"); enEditor = true;
+}
+function disenadorHMI() {
+  const e = EQUIPOS.find(x => x.id === sel);
+  $("editor-info").innerHTML = "HMI del <b>tablero " + (e ? e.n : 1) + "</b>: diseña, «Cargar en la HMI» y «Probar». Tu programa habla con ella por <b>Serial2</b>.";
+  abrirEditor("/hmi?n=" + (e ? e.n : 1));
+}
+async function nodered(ruta) {
+  $("resultado").innerHTML = '<div class="etq">Encendiendo Node-RED…</div>';
+  const r = await fetch("/api/openplc?accion=start&que=nodered", {method: "POST"});
+  const d = await r.json();
+  if (!d.ok) { mostrarSalida(false, d.salida || "No arranca Node-RED"); return; }
+  $("resultado").innerHTML = "";
+  $("editor-info").innerHTML = "Node-RED: el ESP32 PLC publica en <b>tablero1/alumno/entradas</b> y escucha <b>tablero1/alumno/q00</b> (broker 192.168.1.50, enciende su WiFi en el 3D).";
+  // El nuestro va en el 1890; con ot-lab arriba el panel dice que se usa el suyo (1880).
+  const puerto = d.puerto || 1890;
+  if (d.salida) $("editor-info").innerHTML += " · " + esc(d.salida);
+  setTimeout(() => abrirEditor("http://" + host + ":" + puerto + "/" + ruta), d.puerto ? 300 : 3000);
+}
+async function escritorioPC() {
+  await fetch("/api/openplc?accion=start&que=editor", {method: "POST"});
+  $("editor-info").innerHTML = "PC del banco (<b>192.168.1.100</b> cuando su cable LAN va al switch). Barra de abajo: terminal, Wireshark, QModMaster, navegador, OpenPLC.";
+  abrirEditor();
+}
+async function terminalPC() {
+  await fetch("/api/openplc?accion=start&que=editor", {method: "POST"});
+  $("editor-info").innerHTML = "Terminal del PC del banco: <code>alumno@pc-banco</code>.";
+  setTimeout(() => abrirEditor("http://" + host + ":7681/"), 1500);
+}
+function cerrarEditor() { $("editor").classList.remove("abierto"); enEditor = false; }
+
+// ── Monitor serie ───────────────────────────────────────────────────────
+async function alternarWifi() {
+  const eq = ultimo && ultimo.pasarela && ultimo.pasarela.equipos[sel];
+  await fetch("/api/orden", {method: "POST", body: JSON.stringify({t: "wifi", equipo: sel, v: !(eq && eq.wifi)})});
+}
+async function posicionRadio(v) {
+  await fetch("/api/orden", {method: "POST", body: JSON.stringify({t: "orden", equipo: sel, orden: {cmd: "rssi", v: +v}})});
+}
+async function posicionLora(v) {
+  await fetch("/api/orden", {method: "POST", body: JSON.stringify({t: "orden", equipo: sel, orden: {cmd: "lora", pos: v}})});
+}
+async function reponerLora() {
+  await fetch("/api/orden", {method: "POST", body: JSON.stringify({t: "orden", equipo: sel, orden: {cmd: "lora", reponer: true}})});
+}
+function limpiarSerie() { serieTxt = ""; $("serie").textContent = "(sin salida)"; }
+async function serie() {
+  const e = EQUIPOS.find(x => x.id === sel);
+  $("serie-etq").textContent = e.nombre;
+  try {
+    const r = await fetch("/api/serie?equipo=" + sel, {cache: "no-store"});
+    const d = await r.json();
+    const t = (d.texto || "").trim();
+    if (t && t !== serieTxt) {
+      serieTxt = t;
+      const p = $("serie"), abajo = p.scrollTop + p.clientHeight >= p.scrollHeight - 8;
+      p.textContent = t;
+      if (abajo) p.scrollTop = p.scrollHeight;
+    }
+  } catch (_) {}
+}
+
+// ── Prácticas ───────────────────────────────────────────────────────────
+let catalogo = [], practica = null, sondaVerif = null, tokenPrac = 0;
+const ESTADOS = {"lista": "", "pendiente-guia": " · guía por publicar", "falta-banco": " · falta en el banco", "fuera-banco": " · fuera del banco"};
+
+function md(t) {
+  const lineas = t.split("\n"); let html = "", lista = false, tabla = false, par = [], cita = [];
+  const inline = x => esc(x).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>").replace(/(^|[^*])\*([^*]+)\*/g, "$1<i>$2</i>");
+  const vaciar = () => {
+    if (par.length) { html += "<p>" + inline(par.join(" ")) + "</p>"; par = []; }
+    if (cita.length) { html += "<blockquote>" + inline(cita.join(" ")) + "</blockquote>"; cita = []; }
+  };
+  const cerrar = () => { vaciar(); if (lista) { html += "</ul>"; lista = false; } if (tabla) { html += "</table>"; tabla = false; } };
+  let codigo = null;
+  for (const l of lineas) {
+    if (l.startsWith("```")) {                // bloque de codigo / ordenes, tal cual
+      if (codigo === null) { cerrar(); codigo = []; } else { html += "<pre>" + esc(codigo.join("\n")) + "</pre>"; codigo = null; }
+      continue;
+    }
+    if (codigo !== null) { codigo.push(l); continue; }
+    if (/^\|[\s:|-]+\|$/.test(l.trim())) continue;
+    if (l.startsWith("|")) { if (!tabla) { cerrar(); html += "<table>"; tabla = true; }
+      html += "<tr>" + l.split("|").slice(1, -1).map(c => "<td>" + inline(c.trim()) + "</td>").join("") + "</tr>"; continue; }
+    if (/^\s*([-*]|\d+\.) /.test(l)) { if (!lista) { cerrar(); html += "<ul>"; lista = true; } html += "<li>" + inline(l.replace(/^\s*[-*] /, "")) + "</li>"; continue; }
+    if (l.startsWith("> ")) { if (par.length) vaciar(); cita.push(l.slice(2)); continue; }
+    if (l.startsWith("## ")) { cerrar(); html += "<h4>" + inline(l.slice(3)) + "</h4>"; continue; }
+    if (l.startsWith("# ")) { cerrar(); html += "<h3>" + inline(l.slice(2)) + "</h3>"; continue; }
+    if (!l.trim()) { cerrar(); continue; }
+    if (lista || tabla) cerrar();
+    par.push(l.trim());                     // lineas seguidas = un parrafo
+  }
+  cerrar(); if (codigo) html += "<pre>" + esc(codigo.join("\n")) + "</pre>";
+  return html;
+}
+async function cargarPracticas() {
+  catalogo = await (await fetch("/api/practicas")).json();
+  const s = $("prac");
+  s.innerHTML = catalogo.map(p => '<option value="' + p.id + '">' + p.id + " · " + esc(p.titulo) +
+    (p.disponible ? "" : (ESTADOS[p.estado] || "")) + "</option>").join("");
+  let ini = "L1";
+  try { ini = localStorage.getItem("practica") || "L1"; } catch (_) {}
+  if (!catalogo.some(p => p.id === ini)) ini = catalogo.length ? catalogo[0].id : "";
+  s.value = ini; elegirPractica(ini);
+}
+async function elegirPractica(id) {
+  try { localStorage.setItem("practica", id); } catch (_) {}
+  clearInterval(sondaVerif);
+  const mi = ++tokenPrac;                 // si llega una respuesta vieja, se descarta
+  const c = catalogo.find(p => p.id === id); if (!c) return;
+  let html = '<div class="nota">' + esc(c.fecha) + " · " + esc(c.entregable) +
+    (c.guia ? ' · <a href="/guias/' + encodeURIComponent(c.guia) + '" target="_blank">guía (PDF)</a>' : "") + "</div>";
+  if (!c.disponible) {
+    practica = null;
+    const msg = {"pendiente-guia": "La guía de esta práctica aún no está publicada. Ya puedes usar el tablero; los criterios de comprobación llegarán con la guía.",
+                 "falta-banco": "Esta práctica necesita algo que el banco virtual aún no tiene.",
+                 "fuera-banco": "Esta práctica no usa el tablero (se hace con otras herramientas)."}[c.estado] || "";
+    html += '<p class="nota">' + msg + (c.nota ? "<br>" + esc(c.nota) : "") + "</p>";
+    if (c.ejemplos && c.ejemplos.length) html += '<div class="nota">Ejemplos para empezar: ' + c.ejemplos.map(e => "<code>" + e + "</code>").join(", ") +
+      '. <a href="#" onclick="ejemplos();return false">Subir uno…</a></div>';
+    $("prac-info").innerHTML = html; return;
+  }
+  const nueva = await (await fetch("/api/practica?id=" + id)).json();
+  if (mi !== tokenPrac) return;
+  practica = nueva;
+  html += '<details open><summary class="nota">Enunciado</summary><div class="md">' + md(practica.enunciado_texto || "") + "</div></details>" +
+    '<div class="pie"><button class="prim" onclick="prepararPractica()">Preparar el tablero</button>' +
+    (practica.plantilla_texto ? '<button onclick="bajarPlantilla()">Descargar plantilla</button>' : "") +
+    '<button class="prim" id="b-comprobar" onclick="comprobar()">Comprobar mi solución</button></div>' +
+    '<div class="nota" id="espacio-prac"></div>' +
+    '<ul class="pasos" id="pasos"></ul><div id="verif-fin"></div>';
+  // Modo docente: la solucion de ejemplo de la practica, de un clic (al alumno no le llega).
+  const sol = practica.solucion_equipos || (practica.solucion_ejemplo ? [[practica.equipo, practica.solucion_ejemplo]] : []);
+  if (practica.solucion_cables) html += '<div class="docente-sol"><b>Cableado de la solución (docente)</b>: ' +
+    practica.solucion_cables.length + ' hilos. <button onclick="cablearSolucion()">Cablear solución</button><div class="etq" id="cab-res"></div></div>';
+  if (sol.length) html += '<div class="docente-sol"><b>Solución (docente)</b>: ' +
+    sol.map(s => "<code>" + esc(s[1]) + "</code> → " + esc(s[0])).join(", ") +
+    ' <button onclick="subirSolucion()">Subir solución</button><div class="etq" id="sol-res"></div></div>';
+  $("prac-info").innerHTML = html;
+  pintarPasos(practica.pasos.map(t => ({txt: t, ok: null, motivo: ""})), -1);
+  if (practica.equipo && sel !== practica.equipo) elegir(practica.equipo);
+  $("f3d").contentWindow.postMessage({t: "marcar", ids: practica.marcar || [], guia: practica.guia || []}, "*");
+  espacio(false);
+}
+// Imágenes extra por práctica: se bajan al necesitarlas y se pueden soltar al terminar.
+let espacioDatos = {}, sondaEspacio = null;
+const gb = b => b < 1e8 ? Math.round(b / 1e6) + " MB" : (b / 1e9).toFixed(1) + " GB";
+async function espacio(completo) {
+  let d;
+  try { d = await (await fetch("/api/espacio" + (completo ? "?completo=1" : ""))).json(); } catch (_) { return; }
+  espacioDatos = d.paquetes || {};
+  const bajando = Object.values(espacioDatos).some(p => p.bajando && p.bajando.estado === "bajando");
+  if (bajando && !sondaEspacio) sondaEspacio = setInterval(() => espacio(false), 4000);
+  if (!bajando && sondaEspacio) { clearInterval(sondaEspacio); sondaEspacio = null; }
+  const fila = (k, p, corta) => {
+    const b = p.bajando, ocupa = p.bajado ? "en este PC · hasta " + gb(p.bytes) : "sin bajar";
+    const estado = b && b.estado === "bajando" ? '<span class="etq">Bajando ' + esc(b.actual) + " (" + (b.hechas + 1) + "/" + b.total + ")…</span>"
+      : b && b.estado === "error" ? '<span class="error">' + esc(b.salida) + "</span>" : "";
+    const algo = p.imagenes.some(i => i.bytes !== null);
+    return (corta ? "" : "<b>" + esc(p.titulo) + "</b> · ") + '<span class="etq">' + ocupa + "</span> " +
+      (b && b.estado === "bajando" ? estado :
+        (p.bajado ? "" : '<button onclick="bajarImagenes(\'' + k + '\')">Descargar</button> ') +
+        (algo ? '<button onclick="liberarImagenes(\'' + k + '\')">Liberar espacio</button>' : "") + estado);
+  };
+  const pid = practica && practica.id, el = $("espacio-prac");
+  if (el) el.innerHTML = pid && espacioDatos[pid] ? "Imágenes extra de esta práctica: " + fila(pid, espacioDatos[pid], true) : "";
+  if ($("d-espacio").open) {
+    $("espacio-lista").innerHTML = Object.entries(espacioDatos).map(([k, p]) => '<div style="margin:5px 0">' + fila(k, p, false) + "</div>").join("");
+    if (completo) $("espacio-cache").textContent = d.cache ? "Caché: " + d.cache + " (recuperable " + d.cache_recuperable + ")" : "";
+  }
+}
+async function bajarImagenes(k) {
+  const r = await (await fetch("/api/imagenes_bajar?id=" + k, {method: "POST"})).json();
+  $("espacio-res").textContent = r.salida; espacio(false);
+}
+async function liberarImagenes(k) {
+  if (!confirm("Se paran los contenedores de esta práctica y se borran sus imágenes. Tus datos se conservan; la próxima vez habrá que bajarlas otra vez. ¿Seguir?")) return;
+  $("espacio-res").textContent = "Liberando…";
+  const r = await (await fetch("/api/imagenes_liberar?id=" + k, {method: "POST"})).json();
+  $("espacio-res").textContent = r.salida; espacio(true);
+}
+async function limpiarCache() {
+  $("espacio-res").textContent = "Limpiando…";
+  const r = await (await fetch("/api/limpiar_cache", {method: "POST"})).json();
+  $("espacio-res").textContent = r.salida; espacio(true);
+}
+function ejemplos() { document.getElementById("t-serie").scrollIntoView({behavior: "smooth"}); }
+async function cablearSolucion() {
+  const r = await (await fetch("/api/cablear_solucion?id=" + practica.id, {method: "POST"})).json();
+  if (r.ok && (r.modulos || []).length) {
+    $("f3d").contentWindow.postMessage({t: "cablear_modulos", pares: r.modulos}, "*");
+    try { localStorage.setItem("cab_modulos", JSON.stringify({id: practica.id, pares: r.modulos})); } catch (_) {}
+  }
+  $("cab-res").textContent = r.salida || "";
+}
+async function subirSolucion() {
+  const sol = practica.solucion_equipos || [[practica.equipo, practica.solucion_ejemplo]];
+  const out = [];
+  for (const [eq, ej] of sol) {
+    $("sol-res").textContent = "Subiendo " + ej + " a " + eq + "…";
+    let r = {};
+    for (let k = 0; k < 4; k++) {          // tras «Preparar» el cable USB tarda un instante
+      r = await (await fetch("/api/subir_ejemplo?equipo=" + eq + "&ejemplo=" + ej, {method: "POST"})).json();
+      if (r.ok || !/cable USB/.test(r.salida || "")) break;
+      await new Promise(f => setTimeout(f, 2500));
+    }
+    out.push((r.ok ? "✓ " : "✗ ") + (r.salida || "").split("\n").pop());
+  }
+  $("sol-res").textContent = out.join("  ·  ");
+}
+// Modo docente: boton en la cabecera solo si este PC tiene la clave del docente.
+async function estadoDocente() {
+  try {
+    const d = await (await fetch("/api/docente")).json();
+    const b = $("b-docente");
+    b.classList.toggle("oculto", !d.disponible);
+    b.textContent = d.activo ? "Docente ✓ · salir" : "Modo docente";
+    b.dataset.activo = d.activo ? "1" : "";
+  } catch (_) {}
+}
+async function docente() {
+  const b = $("b-docente");
+  if (b.dataset.activo) {
+    await fetch("/api/docente_salir", {method: "POST"});
+  } else {
+    const clave = prompt("Clave del docente");
+    if (!clave) return;
+    const r = await fetch("/api/docente_entrar", {method: "POST", body: JSON.stringify({clave})});
+    if (!r.ok) { alert("Clave incorrecta"); return; }
+  }
+  location.reload();
+}
+estadoDocente();
+async function prepararPractica() {
+  if (!practica) return;
+  $("resultado").innerHTML = '<div class="etq">Preparando el tablero (cables, OpenPLC apagado)…</div>';
+  try { localStorage.removeItem("cab_modulos"); } catch (_) {}
+  const r = await (await fetch("/api/practica_montar?id=" + practica.id, {method: "POST"})).json();
+  $("resultado").innerHTML = '<div class="ok">' + esc(r.salida) + "</div>";
+  $("f3d").contentWindow.postMessage({t: "marcar", ids: practica.marcar || [], guia: practica.guia || []}, "*");
+  if (practica.equipo) { const n = practica.equipo.slice(0, 2); vista(n); }
+}
+function bajarPlantilla() {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([practica.plantilla_texto], {type: "text/plain"}));
+  a.download = (practica.id + "_" + practica.plantilla).replace(/[^\w.-]/g, "_"); a.click();
+}
+function pintarPasos(pasos, actual) {
+  $("pasos").innerHTML = pasos.map((p, i) => '<li class="' + (p.ok === true ? "ok" : p.ok === false ? "no" : i === actual ? "ahora" : "") + '">' +
+    esc(p.txt) + (p.motivo ? '<span class="motivo">' + esc(p.motivo) + "</span>" : "") + "</li>").join("");
+}
+async function comprobar() {
+  if (!practica) return;
+  $("b-comprobar").disabled = true; $("verif-fin").innerHTML = '<div class="nota">Comprobando… el portal reinicia el equipo (como un reset) y pulsa los botones por ti; no toques el tablero.</div>';
+  const r = await fetch("/api/verificar?id=" + practica.id, {method: "POST"});
+  if (!r.ok) { $("verif-fin").innerHTML = '<div class="error">' + esc((await r.json()).salida) + "</div>"; $("b-comprobar").disabled = false; return; }
+  sondaVerif = setInterval(async () => {
+    const e = await (await fetch("/api/verificar_estado")).json();
+    pintarPasos(e.pasos, e.actual);
+    if (!e.corriendo && e.informe) {
+      clearInterval(sondaVerif); $("b-comprobar").disabled = false;
+      const i = e.informe;
+      const pct = i.total ? Math.round(100 * i.aprobados / i.total) : 0;
+      const todo = i.aprobados === i.total;
+      const barra = '<div style="height:8px;border-radius:4px;background:var(--borde);overflow:hidden;margin:6px 0">' +
+        '<div style="height:100%;width:' + pct + '%;background:' + (todo ? "var(--verde)" : pct ? "var(--naranja)" : "var(--rojo)") + '"></div></div>';
+      $("verif-fin").innerHTML = '<div class="' + (todo ? "ok" : "error") + '">' + barra + '<b>' + i.aprobados + " de " + i.total +
+        ' pasos</b>' + (todo ? " · ¡todo correcto!" : "") + ' · <a href="/api/informe" target="_blank">informe para entregar</a></div>';
+    }
+  }, 700);
+}
+
+// ── Wireshark ───────────────────────────────────────────────────────────
+function enlaceWireshark() { $("b-wireshark").href = "tablerolab://wireshark/" + $("red").value; }
+$("red").onchange = enlaceWireshark; enlaceWireshark();
+async function grabar() {
+  const b = $("b-pcap"), red = $("red").value;
+  b.disabled = true; $("cap-info").textContent = "Grabando 30 s de " + red + "… genera tráfico (pulsa botones, sube un programa).";
+  try {
+    const r = await fetch("/api/captura?red=" + red + "&seg=30", {method: "GET"});
+    if (!r.ok) throw new Error((await r.json()).salida);
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "captura_" + red + ".pcap"; a.click();
+    $("cap-info").textContent = "Listo: " + Math.round(blob.size / 1024) + " KB. Ábrelo con Wireshark.";
+  } catch (e) { $("cap-info").textContent = "No se pudo capturar: " + e.message; }
+  b.disabled = false;
+}
+
+pintarSel(); elegir(sel);
+cargarPracticas();
+sondear(); serie();
+setInterval(sondear, 1000);
+setInterval(serie, 1500);
+</script>
+</body>
+</html>

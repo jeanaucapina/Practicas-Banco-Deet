@@ -1,0 +1,4 @@
+# Lo que Node-RED escribe en tiempo de ejecucion; solo flows.json es del repo.
+*
+!.gitignore
+!flows.json

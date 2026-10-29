@@ -1,0 +1,151 @@
+{
+  "id": "L0",
+  "titulo": "Reconocimiento del banco de control",
+  "equipo": "t1.controllino",
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "plantilla": "plantilla.ino",
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "t1.controllino.usb",
+        "pc.usb1"
+      ],
+      [
+        "t1.esp32plc.usb",
+        "pc.usb2"
+      ]
+    ],
+    "energia": [
+      [
+        "t1.fuente",
+        true
+      ],
+      [
+        "t1.controllino",
+        true
+      ],
+      [
+        "t1.esp32plc",
+        true
+      ],
+      [
+        "t1.hmi",
+        true
+      ],
+      [
+        "t1.switch",
+        true
+      ]
+    ],
+    "ordenes": [],
+    "sin_openplc": true
+  },
+  "marcar": [
+    "t1.controllino.usb",
+    "t1.esp32plc.usb",
+    "t1.bornera.24V.1",
+    "t1.bornera.0V.1"
+  ],
+  "verificacion": [
+    {
+      "txt": "Parte III · el Controllino corre el Listado L0.1 (traza por el monitor serie)",
+      "hacer": [
+        {
+          "tipo": "serie",
+          "equipo": "t1.controllino",
+          "regex": "L0: parpadeo de D0 iniciado|D0 = (HIGH|LOW)",
+          "max_ms": 4000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · D0 parpadea: 1 s encendido, 1 s apagado",
+      "hacer": [
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "0": 0
+          },
+          "max_ms": 2500
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "0": 1
+          },
+          "max_ms": 2500
+        },
+        {
+          "tipo": "mantener",
+          "equipo": "t1.controllino",
+          "do": {
+            "0": 1
+          },
+          "ms": 450
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "0": 0
+          },
+          "max_ms": 1500
+        },
+        {
+          "tipo": "mantener",
+          "equipo": "t1.controllino",
+          "do": {
+            "0": 0
+          },
+          "ms": 450
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "0": 1
+          },
+          "max_ms": 1500
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · el ESP32 parpadea Q0.0 en modo 5 V (S0_24v en LOW)…",
+      "hacer": [
+        {
+          "tipo": "esperar",
+          "equipo": "t1.esp32plc",
+          "s24": {
+            "0": 0
+          },
+          "do": {
+            "0": 1
+          },
+          "max_ms": 25000
+        }
+      ]
+    },
+    {
+      "txt": "…y después en modo 24 V (S0_24v en HIGH)",
+      "hacer": [
+        {
+          "tipo": "esperar",
+          "equipo": "t1.esp32plc",
+          "s24": {
+            "0": 1
+          },
+          "do": {
+            "0": 1
+          },
+          "max_ms": 25000
+        }
+      ]
+    }
+  ]
+}

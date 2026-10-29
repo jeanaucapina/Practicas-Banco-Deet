@@ -1,0 +1,36 @@
+{
+  "id": "L4",
+  "titulo": "Captura y análisis de tráfico (Wireshark + Docker)",
+  "equipo": "",
+  "exige_programa": false,
+  "lenguajes": [],
+  "enunciado": "enunciado.md",
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      ["t1.esp32plc.eth", "t1.switch.p1"],
+      ["pc.eth", "t1.switch.p2"],
+      ["t1.controllino.eth", "t1.switch.p3"],
+      ["t2.controllino.eth", "t2.switch.p1"],
+      ["t1.switch.p4", "t2.switch.p4"]
+    ],
+    "ordenes": [["t2.controllino", {"cmd": "modo", "v": 4}]]
+  },
+  "marcar": ["pc.eth", "t1.esp32plc.eth"],
+  "verificacion": [
+    {"txt": "Parte I · el PC (192.168.1.100) alcanza al ESP32 PLC (192.168.1.10)",
+     "hacer": [{"tipo": "pc", "cmd": "ping -c 2 -W 1 192.168.1.10", "regex": " 0% packet loss", "max_ms": 8000}]},
+    {"txt": "Parte I · l4_banco.pcapng tiene la respuesta ARP de 192.168.1.10",
+     "hacer": [{"tipo": "pc", "cmd": "tshark -r ~/trabajo/L4/l4_banco.pcapng -Y 'arp.opcode == 2 && arp.src.proto_ipv4 == 192.168.1.10' 2>/dev/null | wc -l", "regex": "^\\s*[1-9]"}]},
+    {"txt": "Parte I · …y al menos diez ecos ICMP con su respuesta",
+     "hacer": [{"tipo": "pc", "cmd": "tshark -r ~/trabajo/L4/l4_banco.pcapng -Y 'icmp.type == 0 && ip.src == 192.168.1.10' 2>/dev/null | wc -l", "regex": "^\\s*([1-9]\\d+)\\s*$"}]},
+    {"txt": "Parte II · l4_planta.pcapng: Modbus TCP con número par de tramas",
+     "hacer": [{"tipo": "pc", "cmd": "n=$(tshark -r ~/trabajo/L4/l4_planta.pcapng -Y mbtcp 2>/dev/null | wc -l); echo \"MBTCP $n PAR $((n % 2 == 0 && n > 20))\"", "regex": "PAR 1"}]},
+    {"txt": "Parte IV · las peticiones FC3 llegan cada 250 ms (±10 ms de media)",
+     "hacer": [{"tipo": "pc", "cmd": "tshark -r ~/trabajo/L4/l4_planta.pcapng -Y 'modbus.func_code == 3 && tcp.len > 0 && tcp.dstport == 502' -T fields -e frame.time_delta_displayed 2>/dev/null | awk 'NR>1{s+=$1;n++} END{m=(n?s/n:0); print \"MEDIA\", m; if (m>0.240 && m<0.260) print \"CICLO_OK\"}'", "regex": "CICLO_OK"}]},
+    {"txt": "Parte III · el comentario de paquete del Paso 15 viaja en el .pcapng",
+     "hacer": [{"tipo": "pc", "cmd": "tshark -r ~/trabajo/L4/l4_planta.pcapng -Y frame.comment -T fields -e frame.comment 2>/dev/null | head -3", "regex": "(?i)diseccionada"}]},
+    {"txt": "Parte IV · serie_ciclo.csv exportada con tshark (Listado L4.9)",
+     "hacer": [{"tipo": "pc", "cmd": "wc -l < ~/trabajo/L4/serie_ciclo.csv; head -2 ~/trabajo/L4/serie_ciclo.csv", "regex": "^\\s*\\d{2,}"}]}
+  ]
+}

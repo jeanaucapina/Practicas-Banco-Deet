@@ -1,0 +1,25 @@
+# Taller U2 · hoja de resultados del grupo. «Comprobar mi solución» lee este archivo
+# (~/trabajo/U2/respuestas.txt en el PC del banco). Una cifra por línea, en las unidades
+# del nombre; decimal con punto o con coma. Las tablas de texto van en la hoja de papel.
+grupo =
+
+# Ejercicio 2 (a) · sondeo Modbus RTU, N = 10 esclavos, 19 200 baudios 8N1, Tproc = 5 ms
+T_con_ms =
+T_resp_ms =
+T_trans_ms =
+T_ciclo_ms =
+# ... y medido en el banco con medir_fc3.py (la media, sin Tproc teórico)
+T_trans_medido_ms =
+
+# Ejercicio 2 (b) · CAN a 500 kbit/s, trama de 127 bits, mensaje 0x010
+T_trama_can_ms =
+T_peor_can_ms =
+
+# Ejercicio 2 (c) · CSMA/CD a 10 Mbit/s
+T_slot_us =
+espera_max_10_ms =
+
+# Análisis 1 y 3
+N_max =
+espera_max_1_us =
+espera_max_5_ms =

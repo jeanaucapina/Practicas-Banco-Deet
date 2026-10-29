@@ -1,0 +1,22 @@
+# Practica L5 - itinerario C (banco virtual, en TU Docker): la version reducida de la
+# Parte III en un contenedor con espacios de red (ver red.sh).
+#
+#   docker compose -p l5 up -d
+#   docker exec -it l5 nodo sw2                       # shell en el conmutador de celda
+#   docker exec -it l5 nodo controlador ping -i 0.01 -c 6000 192.168.10.50
+#   docker exec l5 cortar      /  docker exec l5 reponer   # el troncal eth5 (Paso 12)
+#   docker compose -p l5 down
+#
+# Las capturas que hagas con «tcpdump -w /l5/...» quedan en esta carpeta.
+services:
+  l5:
+    image: nicolaka/netshoot
+    container_name: l5
+    hostname: l5
+    cap_add: [NET_ADMIN, NET_RAW, SYS_ADMIN]
+    network_mode: none
+    environment: {T_RECONF_MS: "200"}
+    volumes: ["./red.sh:/red.sh:ro", "./:/l5"]
+    working_dir: /l5
+    command: ["sh", "/red.sh"]
+    restart: "no"

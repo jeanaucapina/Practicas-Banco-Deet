@@ -1,0 +1,9 @@
+{
+  "objeto": "Tablero1",
+  "nodeid": "numerico",
+  "interbloqueo": "Remote",
+  "variables": [
+    {"nombre": "Remote",        "nodeid": 1010, "tipo": "Boolean", "escribible": true, "valor": false},
+    {"nombre": "Potenciometro", "nodeid": 1011, "tipo": "UInt16",  "registro": 0, "escribible": false}
+  ]
+}

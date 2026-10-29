@@ -1,0 +1,132 @@
+{
+  "id": "L3",
+  "titulo": "Comunicación serial RS-485 con tramas propias",
+  "equipo": "t1.controllino",
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "plantilla": "plantilla.ino",
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "t1.controllino.485A",
+        "t1.esp32plc.485A"
+      ],
+      [
+        "t1.controllino.485B",
+        "t1.esp32plc.485B"
+      ],
+      [
+        "t1.controllino.usb",
+        "pc.usb1"
+      ],
+      [
+        "t1.esp32plc.usb",
+        "pc.usb2"
+      ]
+    ],
+    "energia": [
+      [
+        "t1.esp32plc",
+        true
+      ],
+      [
+        "t1.controllino",
+        true
+      ]
+    ],
+    "ordenes": [],
+    "sin_openplc": true
+  },
+  "marcar": [
+    "t1.controllino.485A",
+    "t1.controllino.485B",
+    "t1.esp32plc.485A",
+    "t1.esp32plc.485B"
+  ],
+  "verificacion": [
+    {
+      "txt": "Parte IV · el maestro sondea A0 del esclavo 0x01 con la trama propia",
+      "hacer": [
+        {
+          "tipo": "serie",
+          "equipo": "t1.controllino",
+          "regex": "A0 = \\d+ ida y vuelta \\[us\\] = \\d+",
+          "max_ms": 6000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · CMD_READ_A0 devuelve la entrada analógica I0.7 del ESP32 (1234 cuentas)",
+      "hacer": [
+        {
+          "tipo": "analogica",
+          "equipo": "t1.esp32plc",
+          "i": 2,
+          "v": 1234
+        },
+        {
+          "tipo": "serie",
+          "equipo": "t1.controllino",
+          "regex": "A0 = 1234 ",
+          "max_ms": 4000
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · el tiempo de ida y vuelta es el de dos tramas a 9600 baudios (8–60 ms)",
+      "hacer": [
+        {
+          "tipo": "serie",
+          "equipo": "t1.controllino",
+          "regex": "ida y vuelta \\[us\\] = ([89]\\d{3}|[1-5]\\d{4})\\b",
+          "max_ms": 3000
+        }
+      ]
+    },
+    {
+      "txt": "Paso 17 · al apagar el esclavo: tres reintentos y «esclavo ausente», sin bloquearse",
+      "hacer": [
+        {
+          "tipo": "energia",
+          "id": "t1.esp32plc",
+          "v": false
+        },
+        {
+          "tipo": "serie",
+          "equipo": "t1.controllino",
+          "regex": "(?s)reintento 3.*ausente",
+          "max_ms": 5000
+        }
+      ]
+    },
+    {
+      "txt": "Paso 17 · al volver a encenderlo, el diálogo se restablece sin reiniciar el maestro",
+      "hacer": [
+        {
+          "tipo": "energia",
+          "id": "t1.esp32plc",
+          "v": true
+        },
+        {
+          "tipo": "pausa",
+          "ms": 1500
+        },
+        {
+          "tipo": "analogica",
+          "equipo": "t1.esp32plc",
+          "i": 2,
+          "v": 777
+        },
+        {
+          "tipo": "serie",
+          "equipo": "t1.controllino",
+          "regex": "A0 = 777 ",
+          "max_ms": 6000
+        }
+      ]
+    }
+  ]
+}

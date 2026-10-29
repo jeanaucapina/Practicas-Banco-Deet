@@ -1,0 +1,69 @@
+# Practica L11 - Piramide CIM completa (ISA-95): ERP -> MES -> SCADA/PLC -> campo.
+# El alumno levanta su propia pila de los niveles 3 y 4, enchufada al segmento del
+# banco (tab_lan), encima del PLC que ya programo en las guias anteriores.
+#
+#   cd tablero/run/pc/L11          (= ~/trabajo/L11 del PC del banco)
+#   docker compose -p l11 up -d    # Odoo tarda ~1 min la primera vez (crea la BD)
+#   docker compose -p l11 down     # al terminar
+#
+#   Odoo (ERP, nivel 4):  http://localhost:8069     (crea BD "banco", instala "Fabricacion")
+#   MES  (nivel 3):       http://localhost:8095     (tablero de ordenes y OEE)
+#
+# Narrativa: una orden de fabricacion creada en Odoo (modulo MRP) la toma el MES, la
+# baja al PLC por Modbus TCP (192.168.1.10:502, el ESP32 PLC de la L7), cuenta la
+# produccion real que el PLC reporta, calcula el OEE y lo devuelve hacia arriba. Asi se
+# recorre la piramide entera de campo (nivel 0) a ERP (nivel 4) sobre el mismo banco.
+services:
+  # Nivel 4 - ERP. Odoo Community con su Postgres. Imagen oficial; pesada pero gratis.
+  odoo-db:
+    image: postgres:15
+    container_name: l11-odoo-db
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+    volumes: ["odoo-db:/var/lib/postgresql/data"]
+    networks: { l11: {} }
+
+  odoo:
+    image: odoo:17
+    container_name: l11-odoo
+    depends_on: [odoo-db]
+    environment: { HOST: odoo-db, USER: odoo, PASSWORD: odoo }
+    ports: ["127.0.0.1:8069:8069"]
+    volumes: ["odoo-data:/var/lib/odoo"]
+    networks:
+      l11: {}
+      tab_lan: { ipv4_address: 192.168.1.63 }
+
+  # Nivel 3 - MES propio (Flask + SQLite + cliente Modbus). Ata ERP y PLC: lee las
+  # ordenes de fabricacion de Odoo por su API JSON-RPC, las ejecuta contra el PLC y
+  # publica el avance y el OEE. Codigo en mes.py (esta carpeta).
+  mes:
+    image: python:3.12-slim
+    container_name: l11-mes
+    working_dir: /app
+    command: sh -c "pip install --no-cache-dir flask==3.0.3 pymodbus==3.6.9 requests==2.32.3 >/dev/null && python mes.py"
+    environment:
+      MES_PLC: "192.168.1.10:502"        # el ESP32 PLC de la L7 (victima/produccion)
+      MES_ODOO: "http://odoo:8069"
+      MES_ODOO_DB: "banco"
+      MES_ODOO_USER: "admin"
+      MES_ODOO_PASS: "admin"
+    volumes: ["./:/app"]
+    ports: ["127.0.0.1:8095:8095"]
+    depends_on: [odoo]
+    networks:
+      l11: {}
+      tab_lan: { ipv4_address: 192.168.1.62 }
+
+volumes:
+  odoo-db:
+  odoo-data:
+
+networks:
+  l11:
+  # El segmento del banco ya existe (lo crea el tablero); aqui solo nos enganchamos.
+  tab_lan:
+    external: true
+    name: tab_lan

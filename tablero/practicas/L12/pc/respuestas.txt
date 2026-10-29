@@ -1,0 +1,15 @@
+# L12 · Comunicación entre tableros · hoja de resultados del grupo.
+# «Comprobar mi solución» lee este archivo (~/trabajo/L12/respuestas.txt en el PC del banco).
+grupo =
+
+# Parte C · desde el PC (enchufado al switch del tablero 1):  ping -c 4 192.168.1.12
+# porcentaje de paquetes perdidos SIN el latiguillo entre switches, y CON él
+perdida_sin_latiguillo =
+perdida_con_latiguillo =
+
+# Parte C · peticiones sin respuesta del maestro en MAESTRO TCP sin latiguillo
+# (registro holding 5 del Controllino 1, o «sin respuesta» en su HMI)
+sin_respuesta_tcp =
+
+# ¿Por qué el bus RS-485 entre tableros funciona sin tocar los switches? (una frase)
+por_que_rs485 =

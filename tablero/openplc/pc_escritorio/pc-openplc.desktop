@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=OpenPLC Editor
+Comment=Escalera, bloques y texto estructurado (IEC 61131-3)
+Exec=sh -c "cd /OpenPLC_Editor && ./.venv/bin/python3 ./editor/Beremiz.py"
+Icon=applications-engineering

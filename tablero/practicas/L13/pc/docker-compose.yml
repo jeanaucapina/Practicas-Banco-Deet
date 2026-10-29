@@ -1,0 +1,32 @@
+# Practica L13 - OPC UA, nivel de entrada. Tu servidor OPC UA del tablero: una pasarela
+# Modbus TCP <-> OPC UA que publica los registros del ESP32 PLC (L7) como nodos con nombre.
+# El modelo de variables lo defines TU en modelo.json (esta carpeta).
+#
+#   cd tablero/run/pc/L13          (= ~/trabajo/L13 del PC del banco)
+#   docker compose -p l13 up -d    # la primera vez instala asyncua (~30 s)
+#   docker restart l13-opcua       # despues de editar modelo.json
+#   docker logs l13-opcua          # errores del modelo (tipo no valido, falta un nodeid...)
+#   docker compose -p l13 down     # al terminar
+#
+#   Endpoint (UaExpert, Ignition, FUXA):   opc.tcp://localhost:4841/banco/
+#   Desde el PC del banco:                 opc.tcp://192.168.1.64:4841/banco/
+services:
+  opcua:
+    image: python:3.12-slim
+    container_name: l13-opcua
+    working_dir: /app
+    command: sh -c "pip install --no-cache-dir asyncua==1.1.5 pymodbus==3.6.9 >/dev/null 2>&1 && python -u servidor_opcua.py"
+    environment:
+      OPCUA_PLC: "192.168.1.10:502"        # el ESP32 PLC de la L7
+    volumes: ["./:/app"]
+    ports: ["127.0.0.1:4841:4841"]
+    networks:
+      l13: {}
+      tab_lan: { ipv4_address: 192.168.1.64 }
+
+networks:
+  l13:
+  # El segmento del banco ya existe (lo crea el tablero); aqui solo nos enganchamos.
+  tab_lan:
+    external: true
+    name: tab_lan

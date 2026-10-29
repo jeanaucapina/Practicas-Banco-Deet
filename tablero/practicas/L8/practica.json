@@ -1,0 +1,29 @@
+{
+  "id": "L8",
+  "titulo": "PROFINET: anatomía, disección y generación de tramas",
+  "equipo": "",
+  "exige_programa": false,
+  "lenguajes": [],
+  "enunciado": "enunciado.md",
+  "montaje": {
+    "limpiar": false,
+    "cables": [["pc.eth", "t1.switch.p2"]],
+    "generar": [["herramientas/l8_captura_planta.py", "l8_planta.pcapng", 30]],
+    "ordenes": []
+  },
+  "marcar": ["pc.eth"],
+  "verificacion": [
+    {"txt": "La captura provista está en ~/trabajo/L8",
+     "hacer": [{"tipo": "pc", "cmd": "ls -l ~/trabajo/L8/l8_planta.pcapng", "regex": "l8_planta"}]},
+    {"txt": "Parte III · tus guiones dcp_identify.py y rt_generador.py",
+     "hacer": [{"tipo": "pc", "cmd": "cd ~/trabajo/L8 && grep -l 0xFEFE dcp_identify.py && grep -l Dot1Q rt_generador.py", "regex": "rt_generador"}]},
+    {"txt": "Parte III · Wireshark reconoce tu DCP Identify-All (60 B, All Selector)",
+     "hacer": [{"tipo": "pc", "cmd": "tshark -r ~/trabajo/L8/l8_scapy.pcapng -Y 'pn_dcp && frame.len == 60' 2>/dev/null | head -3", "regex": "(?i)Ident Req.*All"}]},
+    {"txt": "Parte III · tus tramas RT: 64 B, PCP 6, FrameID 0x8000",
+     "hacer": [{"tipo": "pc", "cmd": "tshark -r ~/trabajo/L8/l8_scapy.pcapng -Y 'pn_rt.frame_id == 0x8000 && vlan.priority == 6 && frame.len == 64' 2>/dev/null | wc -l", "regex": "^\\s*([2-9]\\d|\\d{3,})\\s*$"}]},
+    {"txt": "Parte III · el contador de ciclo avanza de 128 en 128 (4 ms)",
+     "hacer": [{"tipo": "pc", "cmd": "tshark -r ~/trabajo/L8/l8_scapy.pcapng -Y 'pn_rt.frame_id == 0x8000' -T fields -e pn_rt.cycle_counter 2>/dev/null | awk 'NR>1{d=($1-p+65536)%65536; if(d!=128 && d!=0)mal++} {p=$1} END{print (NR>20 && mal+0==0) ? \"CONTADOR_OK\" : \"CONTADOR_MAL \" NR \" \" mal}'", "regex": "CONTADOR_OK"}]},
+    {"txt": "Parte IV · l8_ciclo_rt.csv exportado con el Listado L8.6",
+     "hacer": [{"tipo": "pc", "cmd": "head -2 ~/trabajo/L8/l8_ciclo_rt.csv", "regex": "frame\\.number.*pn_rt\\.cycle_counter"}]}
+  ]
+}

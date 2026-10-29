@@ -1,0 +1,188 @@
+{
+  "id": "L6",
+  "titulo": "Modbus RTU maestro-esclavo sobre RS-485",
+  "equipo": "t1.esp32plc",
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "plantilla": "plantilla.ino",
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "t1.controllino.485A",
+        "t1.esp32plc.485A"
+      ],
+      [
+        "t1.controllino.485B",
+        "t1.esp32plc.485B"
+      ],
+      [
+        "usb485.A",
+        "t1.controllino.485A"
+      ],
+      [
+        "usb485.B",
+        "t1.controllino.485B"
+      ],
+      [
+        "t1.controllino.usb",
+        "pc.usb1"
+      ],
+      [
+        "t1.esp32plc.usb",
+        "pc.usb2"
+      ]
+    ],
+    "energia": [
+      [
+        "t1.esp32plc",
+        true
+      ],
+      [
+        "t1.controllino",
+        true
+      ]
+    ],
+    "ordenes": [],
+    "sin_openplc": true
+  },
+  "marcar": [
+    "t1.controllino.485A",
+    "t1.controllino.485B",
+    "t1.esp32plc.485A",
+    "t1.esp32plc.485B",
+    "usb485.A",
+    "usb485.B"
+  ],
+  "verificacion": [
+    {
+      "txt": "Parte III · el maestro (ESP32) lee el esclavo 1 (Controllino) con FC3, sin timeout",
+      "hacer": [
+        {
+          "tipo": "serie",
+          "equipo": "t1.esp32plc",
+          "regex": "\\[0\\]=\\d+ \\[1\\]=\\d+ \\[2\\]=\\d+",
+          "max_ms": 6000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · [0] viaja íntegro: A0 del Controllino a 700 cuentas → [0]=700",
+      "hacer": [
+        {
+          "tipo": "analogica",
+          "equipo": "t1.controllino",
+          "i": 0,
+          "v": 700
+        },
+        {
+          "tipo": "serie",
+          "equipo": "t1.esp32plc",
+          "regex": "\\[0\\]=700 ",
+          "max_ms": 4000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · [2] y [3] cuentan los mensajes atendidos (iguales)",
+      "hacer": [
+        {
+          "tipo": "serie",
+          "equipo": "t1.esp32plc",
+          "regex": "\\[2\\]=([1-9]\\d*) \\[3\\]=\\1 ",
+          "max_ms": 3000
+        }
+      ]
+    },
+    {
+      "txt": "Parte V · con el maestro fuera del bus, QModMaster/mbpoll leen el mapa por /dev/ttyUSB0",
+      "hacer": [
+        {
+          "tipo": "energia",
+          "id": "t1.esp32plc",
+          "v": false
+        },
+        {
+          "tipo": "pausa",
+          "ms": 1500
+        },
+        {
+          "tipo": "pc",
+          "cmd": "mbpoll -m rtu -b 19200 -P none -a 1 -t 4 -0 -r 0 -c 8 -1 -o 2 /dev/ttyUSB0",
+          "regex": "\\[7\\]:",
+          "max_ms": 8000
+        }
+      ]
+    },
+    {
+      "txt": "Parte V · FC6 sobre [4] cierra el relé R0 y su eco vuelve por [1]",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "mbpoll -m rtu -b 19200 -P none -a 1 -t 4 -0 -r 4 -o 2 /dev/ttyUSB0 1",
+          "regex": "(?i)written 1"
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "rele": {
+            "0": 1
+          },
+          "do": {
+            "0": 1
+          },
+          "max_ms": 3000
+        },
+        {
+          "tipo": "pc",
+          "cmd": "mbpoll -m rtu -b 19200 -P none -a 1 -t 4 -0 -r 4 -o 2 /dev/ttyUSB0 0",
+          "regex": "(?i)written 1"
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "rele": {
+            "0": 0
+          },
+          "max_ms": 3000
+        }
+      ]
+    },
+    {
+      "txt": "Parte V · excepción 02: diez registros desde el 4 en un mapa de ocho",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "mbpoll -m rtu -b 19200 -P none -a 1 -t 4 -0 -r 4 -c 10 -1 -o 2 /dev/ttyUSB0",
+          "regex": "(?i)illegal data address"
+        }
+      ]
+    },
+    {
+      "txt": "Parte V · excepciones 01 y 03 con tramas crudas (FC7 y 126 registros)",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "stty -F /dev/ttyUSB0 19200 cs8 -cstopb -parenb raw -echo min 0 time 20; (timeout 3 od -An -tx1 < /dev/ttyUSB0 > /tmp/l6_crudas &); sleep 0.3; printf '\\x01\\x07\\x41\\xE2' > /dev/ttyUSB0; sleep 0.5; printf '\\x01\\x03\\x00\\x00\\x00\\x7E\\xC5\\xEA' > /dev/ttyUSB0; sleep 3; tr -s ' \\n' ' ' < /tmp/l6_crudas",
+          "regex": "01 87 01 82 30.*01 83 03 01 31"
+        }
+      ]
+    },
+    {
+      "txt": "El maestro vuelve al bus",
+      "hacer": [
+        {
+          "tipo": "energia",
+          "id": "t1.esp32plc",
+          "v": true
+        },
+        {
+          "tipo": "pausa",
+          "ms": 1000
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+# ChirpStack Gateway Bridge: recibe el packet forwarder Semtech UDP de la pasarela
+# del laboratorio (192.168.1.70 -> este contenedor, 192.168.1.80:1700) y lo publica en
+# MQTT con el prefijo de la region (REGION en docker-compose.yml).
+[backend]
+  type="semtech_udp"
+  [backend.semtech_udp]
+    udp_bind="0.0.0.0:1700"
+
+[integration.mqtt.auth.generic]
+  servers=["tcp://192.168.1.50:1883"]
+  username=""
+  password=""

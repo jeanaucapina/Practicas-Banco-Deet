@@ -1,0 +1,84 @@
+{
+  "objeto": "Tablero1",
+  "nodeid": "numerico",
+  "interbloqueo": "Remote",
+  "variables": [
+    {
+      "nombre": "Remote",
+      "nodeid": 1010,
+      "tipo": "Boolean",
+      "escribible": true,
+      "valor": false
+    },
+    {
+      "nombre": "Potenciometro",
+      "nodeid": 1011,
+      "tipo": "UInt16",
+      "registro": 0,
+      "escribible": false
+    },
+    {
+      "nombre": "RealimRelA",
+      "nodeid": 1012,
+      "tipo": "Boolean",
+      "registro": 1,
+      "escribible": false
+    },
+    {
+      "nombre": "Escrituras",
+      "nodeid": 1013,
+      "tipo": "UInt16",
+      "registro": 3,
+      "escribible": false
+    },
+    {
+      "nombre": "RelA",
+      "nodeid": 1014,
+      "tipo": "Boolean",
+      "registro": 4,
+      "escribible": true
+    },
+    {
+      "nombre": "RelB",
+      "nodeid": 1015,
+      "tipo": "Boolean",
+      "registro": 5,
+      "escribible": true
+    },
+    {
+      "nombre": "Q02",
+      "nodeid": 1016,
+      "tipo": "Boolean",
+      "registro": 6,
+      "escribible": true
+    },
+    {
+      "nombre": "Q03",
+      "nodeid": 1017,
+      "tipo": "Boolean",
+      "registro": 7,
+      "escribible": true
+    },
+    {
+      "nombre": "SetPoint_Alarma",
+      "nodeid": 1018,
+      "tipo": "UInt16",
+      "escribible": true,
+      "valor": 800
+    },
+    {
+      "nombre": "Pulsador1",
+      "nodeid": 1019,
+      "tipo": "Boolean",
+      "registro": 8,
+      "escribible": false
+    },
+    {
+      "nombre": "Pulsador2",
+      "nodeid": 1020,
+      "tipo": "Boolean",
+      "registro": 9,
+      "escribible": false
+    }
+  ]
+}

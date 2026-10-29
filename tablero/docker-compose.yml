@@ -1,0 +1,362 @@
+# Tableros de comunicaciones industriales simulados (dos puestos).
+#
+# Los equipos arrancan SIN cable de red: solo estan en la red de gestion (canal
+# con las gafas) y en el bus RS-485. El cable Ethernet lo pone la pasarela con
+# `docker network connect tab_lan ...` cuando en las gafas se enchufa el
+# latiguillo al switch. Por eso tab_lan no aparece en sus `networks`.
+#
+# Plan de direcciones: el segmento del banco de las guias del curso,
+# 192.168.1.0/24 (switch del tablero y punto de acceso WiFi del laboratorio):
+#   ESP32 PLC    T1 192.168.1.10 (guias L4, L7, L9) · T2 .20   gestion 172.30.99.2n
+#   Controllino  T1 192.168.1.11 · T2 .12   RTU n               gestion 172.30.99.1n
+#   OpenPLC .31/.32 · S7-1200 .40 · broker MQTT .50 · Node-RED .60 · FUXA SCADA .65
+#   pasarela LoRaWAN .70 · servidor de red del alumno (L10) .80
+#   PC del alumno .100 · atacante (U6) .101 · pasarela .1 (anfitrion) · DHCP .150-.199
+# Las IP de los PLC son las de fabrica: el programa del alumno puede pedir otra
+# (Ethernet.begin, WiFi.config) y la pasarela se la da.
+#
+# Puentes con nombre fijo para capturar sin buscar nada:
+#   Wireshark -i tab-lan    el segmento del banco (Modbus TCP, MQTT, S7, PROFINET...)
+#   Wireshark -i tab-485    buses RS-485 (UDP 4850-4859: Decode As -> mbrtu)
+
+name: tablero
+
+# Python + g++: cada equipo corre la imitacion de fabrica (controllino.py,
+# esp32plc.py) o el .ino que suba el alumno (arranque.py, programa.py,
+# .\lab.ps1 subir). Los programas subidos viven en ./programas/<equipo>/.
+x-equipo: &equipo
+  image: tablero-equipo
+  build: {context: ., dockerfile: Dockerfile.equipo}
+  working_dir: /app
+  command: python arranque.py
+  volumes:
+    - ./dispositivos:/app:ro
+    - ./programas:/programas
+    - /etc/localtime:/etc/localtime:ro
+  # NET_ADMIN: el programa del alumno fija la MAC (Ethernet.begin(mac, ...)),
+  # como en el real; arp -a la muestra desde el PC.
+  cap_add: [NET_ADMIN]
+  restart: unless-stopped
+  stop_grace_period: 1s
+
+services:
+  t1-controllino:
+    <<: *equipo
+    container_name: tab1-controllino
+    hostname: t1-controllino
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TAB_ID: t1.controllino
+      TAB_TABLERO: "1"
+      TAB_IP_485: 172.30.85.11
+    networks:
+      tab_gestion: {ipv4_address: 172.30.99.11}
+      tab_485: {ipv4_address: 172.30.85.11}
+
+  t1-esp32plc:
+    <<: *equipo
+    container_name: tab1-esp32plc
+    hostname: t1-esp32plc
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TAB_ID: t1.esp32plc
+      TAB_TABLERO: "1"
+      TAB_IP_485: 172.30.85.21
+    networks:
+      tab_gestion: {ipv4_address: 172.30.99.21}
+      tab_485: {ipv4_address: 172.30.85.21}
+
+  t2-controllino:
+    <<: *equipo
+    container_name: tab2-controllino
+    hostname: t2-controllino
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TAB_ID: t2.controllino
+      TAB_TABLERO: "2"
+      TAB_IP_485: 172.30.85.12
+    networks:
+      tab_gestion: {ipv4_address: 172.30.99.12}
+      tab_485: {ipv4_address: 172.30.85.12}
+
+  t2-esp32plc:
+    <<: *equipo
+    container_name: tab2-esp32plc
+    hostname: t2-esp32plc
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TAB_ID: t2.esp32plc
+      TAB_TABLERO: "2"
+      TAB_IP_485: 172.30.85.22
+    networks:
+      tab_gestion: {ipv4_address: 172.30.99.22}
+      tab_485: {ipv4_address: 172.30.85.22}
+
+  # "Servidor del laboratorio": siempre en el segmento del banco.
+  broker:
+    image: eclipse-mosquitto:2
+    container_name: tab-broker
+    hostname: broker
+    volumes:
+      - ./broker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    restart: unless-stopped
+    networks:
+      # alias = nombre del contenedor de la guia L9 (Node-RED lo resuelve por nombre)
+      tab_lan: {ipv4_address: 192.168.1.50, aliases: [mosquitto_broker]}
+      tab_gestion: {ipv4_address: 172.30.99.50}   # para el panel, fuera de la captura
+
+  # Pasarela LoRaWAN del laboratorio (guia L10) y el aire de 915 MHz: 8 canales US915
+  # (FSB 2), packet forwarder Semtech UDP hacia el servidor de red del alumno
+  # (192.168.1.80:1700 por defecto). Su RJ45 se cablea al switch en las gafas: sin
+  # cable no hay backhaul (la pasarela del tablero la pone en tab_lan, .70).
+  lora:
+    <<: *equipo
+    container_name: tab-lora
+    hostname: pasarela-lora
+    command: python pasarela_lora.py
+    environment: {PYTHONUNBUFFERED: "1", TAB_LORA_DIR: /lora}
+    volumes:
+      - ./dispositivos:/app:ro
+      - ./run/lora:/lora
+    networks:
+      tab_gestion: {ipv4_address: 172.30.99.70}
+
+  # S7-1200 simulado (Snap7): S7comm real en la LAN, 192.168.1.40:102. Desde
+  # el PC, 127.0.0.1:102 (rack 0, slot 1); ese trafico entra por tab-lan desde
+  # 192.168.1.1 (el anfitrion), asi que se ve en la captura. Mapa en dispositivos/s7.py.
+  s7:
+    build: {context: ., dockerfile: Dockerfile.s7}
+    image: tablero-s7
+    container_name: tab-s7
+    hostname: s7-1200
+    working_dir: /app
+    command: python s7.py
+    environment: {PYTHONUNBUFFERED: "1"}
+    volumes:
+      - ./dispositivos:/app:ro
+      - ./run/panel:/panel                      # s7.json para el panel del PC
+    ports: ["102:102"]
+    restart: unless-stopped
+    stop_grace_period: 1s
+    networks:
+      tab_lan: {ipv4_address: 192.168.1.40}
+
+  # Panel web del PC: http://localhost:8090 (solo este PC). Todo el tablero en
+  # una pagina: E/S en vivo, captura, MQTT, S7, OpenPLC, subir programas,
+  # monitor serie y guias. Va con la pasarela (perfil "pasarela").
+  panel:
+    profiles: ["pasarela"]
+    build: {context: ., dockerfile: Dockerfile.panel}
+    image: tablero-panel
+    container_name: tab-panel
+    environment: {PANEL_PASARELA: "172.30.99.1:7170", PANEL_BROKER: "172.30.99.50"}
+    volumes:
+      - ./:/tablero
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports: ["127.0.0.1:8090:8090"]
+    restart: "no"
+    stop_grace_period: 1s
+    networks:
+      tab_gestion: {ipv4_address: 172.30.99.6}
+    depends_on: [pasarela]
+
+  # PROFINET simulado en vivo: tramas DCP / LLDP / RT de un PLC y de los Controllino
+  # con el cable enchufado, en tab-lan. Opcional (perfil «profinet»): el banco real no
+  # tiene PROFINET y las guias L4/L7 esperan cero tramas pn_rt en la LAN; la L8 usa la
+  # captura provista (herramientas/l8_captura_planta.py).
+  #   docker compose --profile profinet up -d pnio
+  # Red del anfitrion (la VM): transmite directamente por el puente tab-lan.
+  pnio:
+    profiles: ["profinet"]
+    image: tablero-pasarela
+    container_name: tab-pnio
+    network_mode: host
+    cap_add: [NET_RAW, NET_ADMIN]
+    environment: {PYTHONUNBUFFERED: "1"}
+    command: ["python3", "-u", "dispositivos/profinet.py"]
+    working_dir: /tablero
+    volumes: ["./:/tablero:ro"]
+    restart: "no"
+    stop_grace_period: 1s
+    depends_on: [panel]
+
+  # Tablero 3D en el navegador (Godot web) para quien no usa gafas:
+  # http://localhost:8091 (o dentro del panel). websockify sirve la pagina y
+  # hace de puente WebSocket -> pasarela. Dockerfile.web explica los targets;
+  # `.\lab.ps1 web` deja un build local en run/web, que tiene prioridad.
+  web:
+    profiles: ["pasarela"]
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      target: ${TAB_WEB_TARGET:-completo}
+      additional_contexts: {godot: ../godot}
+    image: ${TAB_WEB_IMAGE:-tablero-web}
+    container_name: tab-web
+    volumes:
+      - ./run/web:/srv/web_local:ro
+    ports: ["127.0.0.1:8091:8091"]
+    restart: "no"
+    stop_grace_period: 1s
+    networks:
+      tab_gestion: {ipv4_address: 172.30.99.7}
+    depends_on: [pasarela]
+
+  # Node-RED (practica L9: ESP32 PLC por WiFi + MQTT + dashboard). Perfil propio:
+  # se enciende desde el portal. Editor http://localhost:1890, dashboard /ui (1890 y no 1880: el 1880 es el Node-RED de ot-lab).
+  # Esta en el segmento del banco (192.168.1.60), como el PC de un alumno; el
+  # broker es 192.168.1.50 y el ESP32 PLC del tablero 1, 192.168.1.10.
+  nodered:
+    profiles: ["nodered"]
+    build: {context: ., dockerfile: Dockerfile.nodered}
+    image: tablero-nodered
+    container_name: tab-nodered
+    volumes: ["./nodered:/data", "./run/historico:/historico"]
+    environment: [TZ=America/Guayaquil]
+    ports: ["127.0.0.1:1890:1880"]
+    restart: "no"
+    stop_grace_period: 1s
+    networks:
+      tab_lan: {ipv4_address: 192.168.1.60, aliases: [nodered]}
+
+  # FUXA (SCADA/HMI web de codigo abierto): ALTERNATIVA al tablero de Node-RED de la
+  # L9. No reemplaza nada: es otra opcion de supervision (nivel 2). Habla Modbus TCP
+  # (al ESP32 PLC victima, 192.168.1.10:502) y MQTT (al broker .50) de forma nativa, y
+  # dibuja sinopticos SVG con tags, alarmas y tendencias "como un SCADA de verdad".
+  # Perfil propio (`.\lab.ps1 scada`): se enciende solo cuando la guia lo pide, para no
+  # cargar el banco. Editor y runtime en http://localhost:1891 (el 1881 es el FUXA de ot-lab). En el segmento del banco
+  # (192.168.1.65), como el PC de un operador: ve el broker .50 y el ESP32 PLC .10.
+  fuxa:
+    profiles: ["scada"]
+    image: frangoteam/fuxa:1.1.17
+    container_name: tab-fuxa
+    hostname: fuxa
+    volumes: ["./fuxa:/usr/src/app/FUXA/server/_appdata"]
+    ports: ["127.0.0.1:1891:1881"]
+    restart: "no"
+    stop_grace_period: 1s
+    networks:
+      tab_lan: {ipv4_address: 192.168.1.65, aliases: [fuxa]}
+
+  # OpenPLC (IEC 61131-3: LD/FBD/ST, "bloques y lineas" como KOP/FUP de TIA)
+  # por tablero: CPU blanda cuyas E/S remotas son el Controllino de su tablero
+  # por Modbus TCP. Perfil propio: solo con `.\lab.ps1 openplc`, porque escribe
+  # las salidas del Controllino cada 100 ms y pisaria los tutoriales.
+  # Web: http://localhost:8081 (tablero 1) y :8082 (tablero 2), openplc/openplc.
+  openplc1: &openplc
+    profiles: ["openplc"]
+    image: tuttas/openplc_v3
+    container_name: tab1-openplc
+    hostname: t1-openplc
+    working_dir: /root/OpenPLC_v3
+    entrypoint: ["sh", "-c", "python2 /openplc/preparar.py && ./start_openplc.sh"]
+    environment: {TAB_TABLERO: "1"}
+    volumes:
+      - ./openplc:/openplc:ro
+    ports: ["8081:8080"]
+    restart: "no"
+    stop_grace_period: 1s
+    networks:
+      tab_lan: {ipv4_address: 192.168.1.31}
+
+  # OpenPLC Editor en el navegador (noVNC): http://localhost:6080. Los
+  # proyectos y los .st generados van a /proyectos = tablero/openplc/proyectos,
+  # de donde el panel del PC los carga en el OpenPLC de cada tablero.
+  editor:
+    profiles: ["openplc"]
+    build: {context: ., dockerfile: Dockerfile.editor}
+    image: tablero-editor
+    container_name: tab-editor
+    hostname: pc-banco
+    # El PC del alumno: tcpdump/Wireshark, `ip addr`, `ip neigh flush` (guias L4, L7).
+    cap_add: [NET_ADMIN, NET_RAW]
+    volumes:
+      - ./openplc/proyectos:/proyectos
+      - ./openplc/ejemplos:/ejemplos:ro
+      - ./run/pc:/root/trabajo                 # carpeta de trabajo del alumno, en su PC
+    ports: ["127.0.0.1:6080:6080", "127.0.0.1:7681:7681"]
+    shm_size: 256m
+    restart: "no"
+    stop_grace_period: 1s
+    networks:
+      tab_gestion: {}
+      # Red aislada de la L8 (Parte III): el alumno emite DCP y RT con scapy sin que
+      # nada salga al banco. Su interfaz es la que tiene 172.29.0.10.
+      pn_lab: {ipv4_address: 172.29.0.10}
+
+  # Atacante del Taller U6 (seguridad IEC 62443): mismo PC-imagen, pero solo terminal web
+  # (ttyd en 7682), en 192.168.1.101. Trae nmap, tshark, iperf3, scapy, pymodbus y
+  # mosquitto-clients. Solo se usa para atacar el PROPIO banco, en el segmento aislado.
+  atacante:
+    profiles: ["pasarela"]
+    image: tablero-editor
+    container_name: tab-atacante
+    hostname: atacante
+    cap_add: [NET_ADMIN, NET_RAW]
+    command: ["bash", "-lc", "ttyd -p 7682 -W -t titleFixed='Atacante U6 (192.168.1.101)' bash -l"]
+    volumes:
+      - ./run/pc:/root/trabajo
+    ports: ["127.0.0.1:7682:7682"]
+    restart: "no"
+    stop_grace_period: 1s
+    networks:
+      tab_lan: {ipv4_address: 192.168.1.101}
+
+  openplc2:
+    <<: *openplc
+    container_name: tab2-openplc
+    hostname: t2-openplc
+    environment: {TAB_TABLERO: "2"}
+    ports: ["8082:8080"]
+    networks:
+      tab_lan: {ipv4_address: 192.168.1.32}
+
+  # ── Solo Windows / Docker Desktop: `lab.ps1 arrancar` (perfil "pasarela") ──
+  # En Linux la pasarela corre en el PC con tablero.sh y estos dos no se usan.
+  pasarela:
+    profiles: ["pasarela"]
+    build: {context: ., dockerfile: Dockerfile.pasarela}
+    image: tablero-pasarela
+    container_name: tab-pasarela
+    network_mode: host          # la red de la VM de Docker: ve tab-lan, 172.30.99.1...
+    cap_add: [NET_RAW, NET_ADMIN]
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TAB_SNIFFER_LOCAL: "1"    # captura tab-lan desde aqui, sin otro contenedor
+      TAB_PUERTO_GAFAS: "7170"  # el 7070 de la VM lo ocupa la publicacion de tab-puerta
+    volumes:
+      - ./:/tablero
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: "no"
+
+  # Publica el 7070 de la pasarela en Windows (0.0.0.0), para las gafas por
+  # WiFi y para `adb reverse tcp:7070 tcp:7070` por USB. La pasarela escucha
+  # en la VM (7170); desde tab_gestion la VM es la puerta de enlace 172.30.99.1.
+  puerta:
+    profiles: ["pasarela"]
+    image: alpine/socat
+    container_name: tab-puerta
+    command: TCP-LISTEN:7070,fork,reuseaddr TCP:172.30.99.1:7170
+    ports: ["7070:7070"]
+    networks:
+      tab_gestion: {ipv4_address: 172.30.99.5}
+    depends_on: [pasarela]
+    restart: "no"
+
+networks:
+  tab_lan:
+    name: tab_lan
+    driver_opts: {com.docker.network.bridge.name: tab-lan}
+    ipam: {config: [{subnet: 192.168.1.0/24, gateway: 192.168.1.1}]}
+  tab_485:
+    name: tab_485
+    driver_opts: {com.docker.network.bridge.name: tab-485}
+    ipam: {config: [{subnet: 172.30.85.0/24, gateway: 172.30.85.1}]}
+  tab_gestion:
+    name: tab_gestion
+    driver_opts: {com.docker.network.bridge.name: tab-gestion}
+    ipam: {config: [{subnet: 172.30.99.0/24, gateway: 172.30.99.1}]}
+  pn_lab:                                   # guia L8: «docker network create --internal pn_lab»
+    name: pn_lab
+    internal: true
+    ipam: {config: [{subnet: 172.29.0.0/24}]}

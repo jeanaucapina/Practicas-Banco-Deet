@@ -1,0 +1,3 @@
+El proyecto Godot del tablero 3D no va en el paquete del alumno: el 3D web ya viene
+exportado en tablero/run/web. Esta carpeta existe solo porque docker-compose.yml la nombra
+como contexto de construccion del servicio web.

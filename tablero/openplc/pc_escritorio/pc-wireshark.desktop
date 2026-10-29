@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Wireshark
+Comment=Captura en la tarjeta de red del PC
+Exec=wireshark
+Icon=org.wireshark.Wireshark

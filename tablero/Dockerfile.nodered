@@ -1,0 +1,7 @@
+# Node-RED para la practica L9 (ESP32 PLC por WiFi + MQTT + dashboard).
+# La imagen oficial + las paletas de la guia: node-red-contrib-modbus (Modbus-Read/Write)
+# y @flowfuse/node-red-dashboard (Dashboard 2), mas el dashboard clasico de los
+# flujos de ejemplo. Los flujos viven en tablero/nodered (volumen).
+FROM nodered/node-red:4.0
+RUN npm install --no-audit --no-fund --omit=dev node-red-dashboard@3 node-red-contrib-modbus@5 \
+        @flowfuse/node-red-dashboard@1

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pasarela LoRaWAN</title>
+<style>
+  :root {
+    --fondo: #f3f4f1; --tarjeta: #fdfdfb; --borde: #dcdfd8; --texto: #1c2321; --suave: #5b6560;
+    --acento: #1f7f74; --acento-f: #d6efe9; --rojo: #b3261e; --rojo-f: #f9dedc; --verde: #2e9d4f;
+    --naranja: #c2571a; --azul: #2f62b0; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fondo: #121614; --tarjeta: #1b201e; --borde: #2c3330; --texto: #e6ebe8; --suave: #9aa6a0;
+      --acento: #5fd0c2; --acento-f: #183330; --rojo: #f2867c; --rojo-f: #3b1d1b; --verde: #5ad17a;
+      --naranja: #f2994a; --azul: #7fa8f0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 14px/1.45 system-ui, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--tarjeta); border-bottom: 1px solid var(--borde); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; }
+  header h1 { font-size: 17px; margin: 0; }
+  header span { color: var(--suave); font-size: 13px; }
+  main { padding: 12px 16px 24px; display: grid; gap: 12px; grid-template-columns: 340px minmax(0, 1fr); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px 14px; }
+  .tarjeta h2 { font-size: 14px; margin: 0 0 8px; }
+  .fila { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dashed var(--borde); font-size: 13px; }
+  .fila:last-child { border-bottom: 0; }
+  .fila b { font-weight: 600; text-align: right; font-family: var(--mono); font-size: 12px; }
+  .ok { color: var(--verde); } .mal { color: var(--rojo); } .suave { color: var(--suave); }
+  label { display: block; font-size: 12px; color: var(--suave); margin: 8px 0 3px; }
+  select, input { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--borde); border-radius: 8px; background: var(--fondo); color: var(--texto); }
+  button { margin-top: 10px; font: inherit; font-weight: 600; background: var(--acento); color: var(--tarjeta); border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; }
+  .tabla { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; font-family: var(--mono); }
+  th { text-align: left; color: var(--suave); font-weight: 600; border-bottom: 1px solid var(--borde); padding: 4px 6px; white-space: nowrap; font-family: system-ui, sans-serif; }
+  td { border-bottom: 1px solid var(--borde); padding: 3px 6px; white-space: nowrap; }
+  tr.bajada td { color: var(--azul); }
+  tr.perdida td.est { color: var(--rojo); }
+  .nota { font-size: 12px; color: var(--suave); margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>HT-M7603 · pasarela LoRaWAN del laboratorio</h1>
+  <span id="eui">EUI —</span>
+  <span id="vivo">—</span>
+</header>
+<main>
+  <div style="display:grid;gap:12px;align-content:start">
+    <section class="tarjeta">
+      <h2>Estado</h2>
+      <div class="fila"><span>Backhaul (RJ45 al switch)</span><b id="bh">—</b></div>
+      <div class="fila"><span>Servidor de red</span><b id="srv">—</b></div>
+      <div class="fila"><span>Último ACK del servidor</span><b id="ack">—</b></div>
+      <div class="fila"><span>Escucha</span><b id="esc" style="white-space:normal">—</b></div>
+      <div class="fila"><span>Recibidas / CRC ok / reenviadas</span><b id="rx">—</b></div>
+      <div class="fila"><span>Bajadas pedidas / emitidas</span><b id="tx">—</b></div>
+    </section>
+    <section class="tarjeta">
+      <h2>Configuración del concentrador</h2>
+      <label for="fsb">Plan de frecuencias</label>
+      <select id="fsb"></select>
+      <label for="servidor">Servidor (packet forwarder Semtech UDP)</label>
+      <input id="servidor" placeholder="192.168.1.80">
+      <label for="puerto">Puerto</label>
+      <input id="puerto" type="number" min="1" max="65535" value="1700">
+      <button onclick="guardar()">Guardar y aplicar</button>
+      <div class="nota" id="msg">Igual que en la web del equipo real: el cambio se aplica en un segundo.</div>
+    </section>
+    <section class="tarjeta">
+      <h2>Nodos en el aire</h2>
+      <div id="nodos" class="suave">—</div>
+    </section>
+  </div>
+  <section class="tarjeta">
+    <h2>Tramas (las últimas 60; la pasarela no descifra nada)</h2>
+    <div class="tabla"><table>
+      <thead><tr><th>hora</th><th>sentido</th><th>canal</th><th>MHz</th><th>datr</th><th>T aire ms</th><th>RSSI</th><th>SNR</th><th>B</th><th>trama</th><th>estado</th></tr></thead>
+      <tbody id="tramas"></tbody>
+    </table></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+for (let n = 1; n <= 8; n++) {
+  const o = document.createElement("option");
+  o.value = n;
+  o.textContent = `US915 FSB ${n} · canales ${8 * (n - 1)}-${8 * n - 1} + ${63 + n}`;
+  $("fsb").appendChild(o);
+}
+let cargado = false;
+function esc(t) { return String(t ?? "").replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c])); }
+async function refrescar() {
+  let d;
+  try { d = await (await fetch("/api/lora")).json(); } catch (e) { return; }
+  $("vivo").textContent = d.vivo ? "en marcha" : "sin respuesta (¿tab-lora parado?)";
+  $("vivo").className = d.vivo ? "ok" : "mal";
+  if (!d.config) return;
+  $("eui").textContent = "EUI " + d.eui + " · " + d.modelo;
+  $("bh").textContent = d.backhaul ? "arriba · " + d.ip : "caído";
+  $("bh").className = d.backhaul ? "ok" : "mal";
+  $("srv").textContent = d.config.servidor + ":" + d.config.puerto;
+  $("ack").textContent = d.ult_ack || "nunca";
+  $("esc").textContent = d.escucha;
+  const c = d.cuenta || {};
+  $("rx").textContent = `${c.rxnb || 0} / ${c.rxok || 0} / ${c.rxfw || 0}`;
+  $("tx").textContent = `${c.dwnb || 0} / ${c.txnb || 0}`;
+  if (!cargado) {
+    $("fsb").value = d.config.fsb; $("servidor").value = d.config.servidor; $("puerto").value = d.config.puerto;
+    cargado = true;
+  }
+  const nodos = Object.entries(d.nodos || {});
+  $("nodos").innerHTML = nodos.length ? nodos.map(([id, n]) =>
+    `<div class="fila"><span>${esc(id)}</span><b>${esc(n.pos)} · ${n.antena ? "antena" : "<span class=mal>SIN ANTENA</span>"}${n.danado ? " · <span class=mal>módulo averiado</span>" : ""}</b></div>`).join("")
+    : "Ningún nodo ha emitido todavía.";
+  $("tramas").innerHTML = (d.tramas || []).slice().reverse().map(t => {
+    const perdida = /perdida|colisi|SIN BACKHAUL|rechazada/.test(t.estado || "");
+    const cls = (t.dir === "bajada" ? "bajada " : "") + (perdida ? "perdida" : "");
+    return `<tr class="${cls}"><td>${esc(t.hora)}</td><td>${esc(t.dir)}</td><td>${esc(t.canal ?? "")}</td><td>${esc(t.freq ?? "")}</td>
+      <td>${esc(t.datr ?? "")}</td><td>${esc(t.toa_ms ?? "")}</td><td>${esc(t.rssi ?? "")}</td><td>${esc(t.snr ?? "")}</td>
+      <td>${esc(t.bytes ?? "")}</td><td>${esc(t.tipo ?? "")}</td><td class="est">${esc(t.estado ?? "")}</td></tr>`;
+  }).join("");
+}
+async function guardar() {
+  const r = await fetch("/api/lora_config", {method: "POST", body: JSON.stringify({
+    fsb: +$("fsb").value, servidor: $("servidor").value.trim(), puerto: +$("puerto").value})});
+  $("msg").textContent = r.ok ? "Guardado: la pasarela lo aplica en un segundo." : "Valores no válidos.";
+}
+refrescar();
+setInterval(refrescar, 1000);
+</script>
+</body>
+</html>

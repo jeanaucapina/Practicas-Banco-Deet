@@ -1,0 +1,214 @@
+{
+  "id": "L1",
+  "titulo": "E/S digitales, rebote y máquina de estados",
+  "equipo": "t1.controllino",
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "plantilla": "plantilla.ino",
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "t1.controllino.usb",
+        "pc.usb1"
+      ]
+    ],
+    "energia": [
+      [
+        "t1.controllino",
+        true
+      ]
+    ],
+    "ordenes": [],
+    "sin_openplc": true
+  },
+  "marcar": [
+    "t1.I16",
+    "t1.I17",
+    "t1.I18",
+    "t1.controllino.usb"
+  ],
+  "verificacion": [
+    {
+      "txt": "Parte IV · arranca en A_VERDE: D2 (verde A) y D6 (rojo B), D12 en marcha",
+      "hacer": [
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "2": 1,
+            "6": 1,
+            "0": 0,
+            "1": 0,
+            "7": 0,
+            "8": 0,
+            "12": 1,
+            "13": 0
+          },
+          "max_ms": 3000
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · a los 8 s pasa a A_AMBAR (D1 y D6)",
+      "hacer": [
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "1": 1,
+            "6": 1,
+            "2": 0
+          },
+          "max_ms": 10000
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · a los 2 s pasa a B_VERDE (D0 y D8)",
+      "hacer": [
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "0": 1,
+            "8": 1,
+            "1": 0,
+            "2": 0
+          },
+          "max_ms": 4000
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · D14 late cada 500 ms (el lazo no se bloquea)",
+      "hacer": [
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "14": 1
+          },
+          "max_ms": 1500
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "14": 0
+          },
+          "max_ms": 1500
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "14": 1
+          },
+          "max_ms": 1500
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · exclusión mutua: nunca D2 y D8 a la vez durante el resto del ciclo",
+      "hacer": [
+        {
+          "tipo": "nunca",
+          "equipo": "t1.controllino",
+          "do": {
+            "2": 1,
+            "8": 1
+          },
+          "ms": 12000
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · I18 (con su rebote) lleva a intermitente ámbar con D13 encendido",
+      "hacer": [
+        {
+          "tipo": "pulsar",
+          "equipo": "t1.controllino",
+          "i": 18,
+          "ms": 400
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "13": 1,
+            "12": 0,
+            "0": 0,
+            "2": 0,
+            "6": 0,
+            "8": 0
+          },
+          "max_ms": 2000
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "1": 1,
+            "7": 1
+          },
+          "max_ms": 1500
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "1": 0,
+            "7": 0
+          },
+          "max_ms": 1500
+        }
+      ]
+    },
+    {
+      "txt": "Parte IV · I16 repone el ciclo desde A_VERDE",
+      "hacer": [
+        {
+          "tipo": "pulsar",
+          "equipo": "t1.controllino",
+          "i": 16,
+          "ms": 400
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.controllino",
+          "do": {
+            "2": 1,
+            "6": 1,
+            "12": 1,
+            "13": 0
+          },
+          "max_ms": 2000
+        }
+      ]
+    },
+    {
+      "txt": "Parte II · una pulsación (que rebota) cuenta una sola vez: I16 en A_VERDE no cambia el estado",
+      "hacer": [
+        {
+          "tipo": "pulsar",
+          "equipo": "t1.controllino",
+          "i": 16,
+          "ms": 400
+        },
+        {
+          "tipo": "mantener",
+          "equipo": "t1.controllino",
+          "do": {
+            "2": 1,
+            "6": 1,
+            "13": 0
+          },
+          "ms": 1500
+        }
+      ]
+    }
+  ]
+}

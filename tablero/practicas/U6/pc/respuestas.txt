@@ -1,0 +1,28 @@
+# Taller U6 · hoja de resultados del grupo. «Comprobar mi solución» lee este archivo
+# (~/trabajo/U6/respuestas.txt en el PC del banco) y, aparte, prueba las defensas en vivo
+# contra TU banco endurecido. Las tablas de texto, el diagrama de zonas y el procedimiento
+# de respuesta van en el PDF (zonas.md es la plantilla).
+grupo =
+
+# Parte I · cuántos campos de la Tabla U6.6 son legibles SIN descifrar (de los 5),
+# antes del endurecimiento y después (con TLS)
+campos_claro_antes =
+campos_claro_despues =
+
+# Parte III · tiempo de ciclo del PLC [ms] por nivel de carga (Tabla U6.8), medido con
+# operador_ciclo.py mientras saturas con saturar.sh
+Tc_0 =
+Tc_25 =
+Tc_50 =
+Tc_100 =
+# factor de degradación F = Tc(100 %) / Tc(0)
+F =
+# a partir de qué % de carga el PLC deja de cumplir su plazo (pierde transacciones)
+carga_umbral_pct =
+
+# Parte IV · por qué el replay sigue siendo posible aun con TLS (una palabra: frescura)
+lo_que_falta_tras_tls =
+
+# Reto (opcional) · tiempo de detección del IDS [s], Ec. (U6.2)
+tdet_replay_s =
+tdet_tormenta_s =

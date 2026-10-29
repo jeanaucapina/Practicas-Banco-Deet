@@ -1,0 +1,145 @@
+{
+  "id": "L9",
+  "titulo": "WiFi industrial, MQTT y pasarela Node-RED",
+  "equipo": "t1.esp32plc",
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "plantilla": "plantilla.ino",
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "pc.eth",
+        "t1.switch.p2"
+      ],
+      [
+        "t1.esp32plc.usb",
+        "pc.usb1"
+      ]
+    ],
+    "wifi": [
+      "t1.esp32plc"
+    ],
+    "ordenes": [],
+    "sin_openplc": true,
+    "pila": true
+  },
+  "marcar": [
+    "t1.esp32plc.usb",
+    "pc.eth",
+    "t1.esp32plc.Q1"
+  ],
+  "verificacion": [
+    {
+      "txt": "Parte I · el PLC está en la WiFi con 192.168.1.10 y responde al ping",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "ping -c 3 -W 1 192.168.1.10",
+          "regex": " 0% packet loss",
+          "max_ms": 10000
+        }
+      ]
+    },
+    {
+      "txt": "Parte I · /estado devuelve el JSON de diagnóstico (SSID, IP, BSSID, canal, RSSI)",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s -m 3 http://192.168.1.10/estado",
+          "regex": "\"ip\":\"192\\.168\\.1\\.10\".*\"canal\":\\d+.*\"rssi\":-\\d+"
+        }
+      ]
+    },
+    {
+      "txt": "Parte I · el enlace «Rele ON» del navegador enciende el foco de Q0.1",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s -m 3 http://192.168.1.10/releOn",
+          "regex": "OK ON"
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.esp32plc",
+          "do": {
+            "1": 1
+          },
+          "max_ms": 3000
+        }
+      ]
+    },
+    {
+      "txt": "Parte I · «Rele OFF» lo apaga",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "curl -s -m 3 http://192.168.1.10/releOff",
+          "regex": "OK OFF"
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.esp32plc",
+          "do": {
+            "1": 0
+          },
+          "max_ms": 3000
+        }
+      ]
+    },
+    {
+      "txt": "Parte I · Modbus TCP por la radio: los ocho holding con FC3",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "mbpoll -m tcp -a 1 -t 4 -0 -r 0 -c 8 -1 192.168.1.10",
+          "regex": "\\[7\\]:"
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · la pasarela publica TT-101 (retenido) en spBv1.0/Planta1/DDATA/PLC01",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "for h in 192.168.1.50 192.168.1.51; do mosquitto_sub -h $h -t 'spBv1.0/Planta1/DDATA/PLC01/TT-101' -C 1 -W 4 -v 2>/dev/null; done",
+          "regex": "TT-101 .*\"v\"",
+          "max_ms": 12000
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · el mando DCMD/KA-104 llega al PLC por FC6 sobre [4] y conmuta Q0.1",
+      "hacer": [
+        {
+          "tipo": "pc",
+          "cmd": "for h in 192.168.1.50 192.168.1.51; do mosquitto_pub -h $h -q 1 -t 'spBv1.0/Planta1/DCMD/PLC01/KA-104' -m '{\"v\":1,\"origen\":\"autocorrector\"}' 2>/dev/null; done; echo ok",
+          "regex": "ok"
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.esp32plc",
+          "do": {
+            "1": 1
+          },
+          "max_ms": 5000
+        },
+        {
+          "tipo": "pc",
+          "cmd": "for h in 192.168.1.50 192.168.1.51; do mosquitto_pub -h $h -q 1 -t 'spBv1.0/Planta1/DCMD/PLC01/KA-104' -m '{\"v\":0,\"origen\":\"autocorrector\"}' 2>/dev/null; done; echo ok",
+          "regex": "ok"
+        },
+        {
+          "tipo": "esperar",
+          "equipo": "t1.esp32plc",
+          "do": {
+            "1": 0
+          },
+          "max_ms": 5000
+        }
+      ]
+    }
+  ]
+}

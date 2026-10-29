@@ -1,0 +1,164 @@
+{
+  "id": "L10",
+  "titulo": "IIoT de largo alcance con LoRaWAN",
+  "equipo": "t1.esp32plc",
+  "lenguajes": [
+    "ino"
+  ],
+  "enunciado": "enunciado.md",
+  "plantilla": "plantilla.ino",
+  "reiniciar": false,
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      [
+        "t1.controllino.485A",
+        "t1.esp32plc.485A"
+      ],
+      [
+        "t1.controllino.485B",
+        "t1.esp32plc.485B"
+      ],
+      [
+        "t1.controllino.usb",
+        "pc.usb1"
+      ],
+      [
+        "t1.esp32plc.usb",
+        "pc.usb2"
+      ],
+      [
+        "lora.eth",
+        "t1.switch.p4"
+      ]
+    ],
+    "energia": [
+      [
+        "t1.esp32plc",
+        true
+      ],
+      [
+        "t1.controllino",
+        true
+      ]
+    ],
+    "ordenes": [
+      [
+        "t1.esp32plc",
+        {
+          "cmd": "lora",
+          "pos": "P1"
+        }
+      ]
+    ],
+    "sin_openplc": true,
+    "pila": true
+  },
+  "marcar": [
+    "t1.esp32plc.lora",
+    "lora.eth",
+    "t1.controllino.485A",
+    "t1.controllino.485B"
+  ],
+  "verificacion": [
+    {
+      "txt": "Seguridad · la antena de 915 MHz está atornillada y el RN2903 no se ha dañado",
+      "hacer": [
+        {
+          "tipo": "estado",
+          "equipo": "t1.esp32plc",
+          "clave": "lora.antena",
+          "valor": true
+        },
+        {
+          "tipo": "estado",
+          "equipo": "t1.esp32plc",
+          "clave": "lora.danado",
+          "valor": false
+        }
+      ]
+    },
+    {
+      "txt": "Parte I · ChirpStack levantado en tu Docker (servidor de red y gateway bridge)",
+      "hacer": [
+        {
+          "tipo": "docker",
+          "args": [
+            "ps",
+            "--filter",
+            "name=l10-",
+            "--format",
+            "{{.Names}}"
+          ],
+          "regex": "(?s)(?=.*l10-chirpstack)(?=.*l10-gateway-bridge)"
+        }
+      ]
+    },
+    {
+      "txt": "Parte I · la pasarela tiene backhaul y el servidor de red le contesta",
+      "hacer": [
+        {
+          "tipo": "docker",
+          "args": [
+            "exec",
+            "tab-lora",
+            "cat",
+            "/lora/pasarela.json"
+          ],
+          "regex": "\"backhaul\": true[\\s\\S]*\"ult_ack\": \"\\d"
+        }
+      ]
+    },
+    {
+      "txt": "Parte I · el nodo está unido por OTAA, solo en la sub-banda 2 (canales 8-15 y los de 500 kHz)",
+      "hacer": [
+        {
+          "tipo": "estado",
+          "equipo": "t1.esp32plc",
+          "clave": "lora.unido",
+          "valor": true
+        },
+        {
+          "tipo": "estado",
+          "equipo": "t1.esp32plc",
+          "clave": "lora.canales",
+          "regex": "^8-15(,6[4-9](-7[01])?|,7[01])*$"
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · el último ascendente es la trama de 9 B con el dato real del PLC (A0, A1 y alarmas)",
+      "hacer": [
+        {
+          "tipo": "lora_trama",
+          "equipo": "t1.esp32plc",
+          "plc": "t1.controllino"
+        }
+      ]
+    },
+    {
+      "txt": "Parte III · el servidor de aplicación la decodifica (temperatura, nivel, alarmas y ts_nodo)",
+      "hacer": [
+        {
+          "tipo": "mqtt",
+          "tema": "^application/[^/]+/device/[0-9a-f]{16}/event/up$",
+          "carga": "\"object\":\\{(?=[^}]*\"temperatura\")(?=[^}]*\"nivel\")(?=[^}]*\"alarma_temp\")(?=[^}]*\"ts_nodo\")",
+          "reciente": 1500,
+          "max_ms": 2000
+        }
+      ]
+    },
+    {
+      "txt": "Parte V · Node-RED lleva el ascendente al tablero de L9 (planta/lorawan/…)",
+      "hacer": [
+        {
+          "tipo": "mqtt",
+          "tema": "^planta/lorawan/temperatura$",
+          "carga": "^-?\\d",
+          "reciente": 1500,
+          "max_ms": 2000
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "id": "U2",
+  "titulo": "Taller: el modelo OSI y el acceso al medio en los buses industriales",
+  "equipo": "",
+  "exige_programa": false,
+  "lenguajes": [],
+  "enunciado": "enunciado.md",
+  "montaje": {
+    "limpiar": true,
+    "cables": [
+      ["usb485.A", "t1.controllino.485A"],
+      ["usb485.B", "t1.controllino.485B"]
+    ],
+    "energia": [["t1.controllino", true]],
+    "ordenes": []
+  },
+  "marcar": ["usb485.A", "usb485.B", "t1.controllino.485A", "t1.controllino.485B"],
+  "verificacion": [
+    {"txt": "Banco · el PC lee el esclavo 1 con FC3 (01 03 00 00 00 08) por /dev/ttyUSB0",
+     "hacer": [{"tipo": "pc", "cmd": "mbpoll -m rtu -b 19200 -P none -a 1 -t 4 -0 -r 0 -c 8 -1 -o 2 /dev/ttyUSB0", "regex": "\\[7\\]:", "max_ms": 8000}]},
+    {"txt": "Ejercicio 2 (a) · Tcon, Tresp y Ttrans de una transacción FC3",
+     "hacer": [{"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^T_con_ms\\s*=\\s*4[.,]1[67]\\d*\\s*$"},
+               {"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^T_resp_ms\\s*=\\s*10[.,]9[34]\\d*\\s*$"},
+               {"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^T_trans_ms\\s*=\\s*23[.,][78]\\d*\\s*$"}]},
+    {"txt": "Ejercicio 2 (a) · peor caso del ciclo de sondeo (Ec. U2.1) y N_max para Tc = 250 ms",
+     "hacer": [{"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^T_ciclo_ms\\s*=\\s*23[78]([.,]\\d*)?\\s*$"},
+               {"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^N_max\\s*=\\s*10\\s*$"}]},
+    {"txt": "Ejercicio 2 (a) medido · la transacción cronometrada en el bus del banco",
+     "hacer": [{"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^T_trans_medido_ms\\s*=\\s*(1[89]|2\\d|3[0-5])([.,]\\d*)?\\s*$"}]},
+    {"txt": "Ejercicio 2 (b) · CAN: tiempo de trama y peor caso de la prioridad más alta",
+     "hacer": [{"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^T_trama_can_ms\\s*=\\s*0[.,]2[45]\\d*\\s*$"},
+               {"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^T_peor_can_ms\\s*=\\s*0[.,]5[01]\\d*\\s*$"}]},
+    {"txt": "Ejercicio 2 (c) y Análisis 3 · CSMA/CD: ranura y esperas máximas tras 1, 5 y 10 colisiones",
+     "hacer": [{"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^T_slot_us\\s*=\\s*51[.,]2\\d*\\s*$"},
+               {"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^espera_max_1_us\\s*=\\s*51[.,]2\\d*\\s*$"},
+               {"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^espera_max_5_ms\\s*=\\s*1[.,]5[89]\\d*\\s*$"},
+               {"tipo": "pc", "cmd": "cat ~/trabajo/U2/respuestas.txt", "regex": "(?m)^espera_max_10_ms\\s*=\\s*52[.,][34]\\d*\\s*$"}]}
+  ]
+}
