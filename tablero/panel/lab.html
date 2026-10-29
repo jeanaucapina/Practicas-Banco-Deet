@@ -38,6 +38,11 @@
   .ayuda3d { position: absolute; right: 10px; bottom: 10px; z-index: 2; font-size: 12px; color: #cfd8e3; background: rgba(8,12,18,.65);
              padding: 4px 9px; border-radius: 6px; pointer-events: none; }
   .vistas { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; z-index: 2; }
+  .guia { display: none; position: absolute; left: 10px; top: 10px; bottom: 50px; width: min(430px, 55%); z-index: 2; overflow: auto;
+          background: rgba(11,15,20,.93); color: #e6edf5; border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; }
+  .guia.abierta { display: block; }
+  .guia h3 { margin: 0 0 6px; font-size: 14px; } .guia .pasos { margin: 4px 0; } .guia .pasos li { border-color: #2a3544; }
+  .guia kbd { font: 11px var(--mono); border: 1px solid #556; border-radius: 4px; padding: 0 4px; }
   .editor { display: none; position: absolute; inset: 0; z-index: 3; background: #000; flex-direction: column; }
   .editor.abierto { display: flex; }
   .editor .barra { background: var(--tarjeta); padding: 6px 10px; display: flex; gap: 10px; align-items: center;
@@ -116,8 +121,10 @@
       <button onclick="vista('')">Vista general</button>
       <button onclick="vista('t1')">Tablero 1</button>
       <button onclick="vista('t2')">Tablero 2</button>
+      <button onclick="guia()" title="Mostrar/ocultar los pasos (F1)">Pasos (F1)</button>
     </div>
-    <div class="ayuda3d">W A S D moverte · Q E bajar/subir · clic derecho girar · rueda zoom · 1 2 0 vistas</div>
+    <div class="ayuda3d">W A S D moverte · Q E bajar/subir · clic derecho girar · rueda zoom · 1 2 0 vistas · F1 pasos</div>
+    <div class="guia" id="guia"></div>
     <div class="editor" id="editor">
       <div class="barra">
         <button onclick="cerrarEditor()">← Volver al tablero</button>
@@ -272,6 +279,7 @@ function elegir(id) {
 }
 window.addEventListener("message", ev => {
   const d = ev.data;
+  if (d && d.t === "guia") guia();
   if (d && d.t === "equipo" && EQUIPOS.some(e => e.id === d.id)) elegir(d.id);
   if (d && d.t === "listo" && practica) $("f3d").contentWindow.postMessage({t: "marcar", ids: practica.marcar || [], guia: practica.guia || []}, "*");
   if (d && d.t === "listo") {      // los hilos de los modulos son solo del 3D: se reponen tras recargar la pagina
@@ -647,9 +655,20 @@ function bajarPlantilla() {
   a.href = URL.createObjectURL(new Blob([practica.plantilla_texto], {type: "text/plain"}));
   a.download = (practica.id + "_" + practica.plantilla).replace(/[^\w.-]/g, "_"); a.click();
 }
+function guia(forzar) {
+  const g = $("guia"); g.classList.toggle("abierta", forzar === undefined ? !g.classList.contains("abierta") : forzar);
+  pintarGuia();
+}
+function pintarGuia() {
+  const g = $("guia"); if (!g.classList.contains("abierta")) return;
+  g.innerHTML = practica ? "<h3>" + esc(practica.id + " · " + (practica.titulo || "")) + ' <span class="etq">F1 para cerrar</span></h3>' +
+    '<ul class="pasos">' + ($("pasos") ? $("pasos").innerHTML : "") + "</ul>" : "<h3>Elige una práctica</h3>";
+}
+document.addEventListener("keydown", e => { if (e.key === "F1") { e.preventDefault(); guia(); } });
 function pintarPasos(pasos, actual) {
   $("pasos").innerHTML = pasos.map((p, i) => '<li class="' + (p.ok === true ? "ok" : p.ok === false ? "no" : i === actual ? "ahora" : "") + '">' +
     esc(p.txt) + (p.motivo ? '<span class="motivo">' + esc(p.motivo) + "</span>" : "") + "</li>").join("");
+  pintarGuia();
 }
 async function comprobar() {
   if (!practica) return;
