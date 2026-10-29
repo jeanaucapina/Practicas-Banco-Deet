@@ -289,6 +289,7 @@ services:
   # mosquitto-clients. Solo se usa para atacar el PROPIO banco, en el segmento aislado.
   atacante:
     profiles: ["pasarela"]
+    build: {context: ., dockerfile: Dockerfile.editor}   # sin esto, en un PC limpio compose intenta bajar "tablero-editor" y falla
     image: tablero-editor
     container_name: tab-atacante
     hostname: atacante
