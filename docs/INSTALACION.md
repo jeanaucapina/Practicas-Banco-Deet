@@ -31,6 +31,8 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # una sola vez: deja ejecu
 .\lab.ps1 navegador
 ```
 
+**¿Descargaste el ZIP de GitHub?** Windows marca esos archivos como «de Internet» y PowerShell se niega a ejecutarlos (error de seguridad). Descomprime y haz **doble clic en `iniciar.cmd`** (o `.\iniciar.cmd`): ejecuta `lab.ps1` sin esa restricción y sin cambiar nada en tu sistema. Con otra orden: `.\iniciar.cmd parar`. Si prefieres PowerShell: `Unblock-File .\lab.ps1` y luego `.\lab.ps1 navegador`.
+
 La primera vez tarda (10 a 30 min según la red): construye las imágenes y exporta el 3D web. Las siguientes, menos de un minuto. Al terminar se abre **http://localhost:8090/lab**.
 
 - **Elegir práctica:** desplegable «Práctica» → **Preparar el tablero** → resolver → **Comprobar mi solución**. Al preparar otra práctica, el portal **baja solo las pilas Docker** de las anteriores (Odoo, ChirpStack, tu servidor OPC UA…); tus datos y archivos se conservan.

@@ -16,6 +16,8 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # una sola vez
 .\lab.ps1 navegador
 ```
 
+**¿Bajaste el ZIP de GitHub en vez de clonar?** Descomprímelo y haz doble clic en **`iniciar.cmd`** (o `.\iniciar.cmd` en PowerShell): evita el error de seguridad de PowerShell sin cambiar nada del sistema. Sirve igual que `lab.ps1 navegador`; con otra orden: `iniciar.cmd parar`.
+
 Se abre **http://localhost:8090/lab**. La primera vez tarda (construye las imágenes);
 después, menos de un minuto. Para apagarlo: `.\lab.ps1 parar`.
 
