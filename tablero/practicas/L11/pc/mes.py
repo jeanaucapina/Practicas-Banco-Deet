@@ -88,15 +88,30 @@ def orden_desde_odoo():
             return None
         ids = _odoo_rpc("object", "execute_kw", [
             ODOO_DB, uid, ODOO_PASS, "mrp.production", "search",
-            [[["state", "in", ["confirmed", "progress"]]]], {"limit": 1}])
+            [[["state", "in", ["confirmed", "progress"]]]], {"limit": 1, "order": "id asc"}])
         if not ids:
             return None
         rec = _odoo_rpc("object", "execute_kw", [
             ODOO_DB, uid, ODOO_PASS, "mrp.production", "read",
             [ids, ["name", "product_qty"]]])[0]
-        return {"nombre": rec["name"], "objetivo": int(rec["product_qty"] or 1), "origen": "odoo"}
+        return {"nombre": rec["name"], "objetivo": int(rec["product_qty"] or 1), "origen": "odoo", "odoo_id": ids[0]}
     except Exception:
         return None       # ERP caido o sin modulo MRP: seguimos con la demo
+
+
+def cerrar_en_odoo(o):
+    """Orden terminada: el MES la marca HECHA en Odoo (lazo hacia arriba), para que no vuelva a tomarla."""
+    if o.get("origen") != "odoo" or not o.get("odoo_id"):
+        return
+    try:
+        uid = _odoo_rpc("common", "login", [ODOO_DB, ODOO_USER, ODOO_PASS])
+        ctx = {"skip_immediate": True, "skip_backorder": True, "skip_consumption": True}
+        _odoo_rpc("object", "execute_kw", [ODOO_DB, uid, ODOO_PASS, "mrp.production", "write",
+                                           [[o["odoo_id"]], {"qty_producing": o["objetivo"]}]])
+        _odoo_rpc("object", "execute_kw", [ODOO_DB, uid, ODOO_PASS, "mrp.production", "button_mark_done",
+                                           [[o["odoo_id"]]], {"context": ctx}])
+    except Exception as e:
+        estado["ult_error"] = "no se pudo cerrar la orden en Odoo: %s" % e
 
 
 def tomar_orden():
@@ -124,6 +139,7 @@ def lazo_mes():
                     salidas.clear()
                 o = estado["orden"]
             en_curso = o["estado"] == "en curso"
+            terminada = None
             # Arrancar la linea (actuador 4 = 1) SOLO con una orden en curso. Con la orden
             # terminada el MES ya no escribe en el PLC: antes lo hacia cada segundo y pisaba
             # el registro 4 a otras practicas (la L9 lo usa como rele).
@@ -162,6 +178,9 @@ def lazo_mes():
                     poner(cli, REG_AVANCE1, 1)
                     poner(cli, REG_AVANCE2, 1)
                     poner(cli, REG_CINTA, 0)               # la cinta se detiene
+                    terminada = dict(o)
+            if terminada:
+                cerrar_en_odoo(terminada)                  # fuera del cerrojo: Odoo puede tardar
         except Exception as e:
             estado["plc_conectado"] = False
             estado["ult_error"] = str(e)
