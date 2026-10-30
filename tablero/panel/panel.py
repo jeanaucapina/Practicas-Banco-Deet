@@ -1205,6 +1205,21 @@ class Atender(BaseHTTPRequestHandler):
                 n += 1
             return self._json({"ok": True, "modulos": modulos,
                                "salida": "Cableado de la solución: %d cables de red y %d de módulos" % (n, len(modulos))})
+        if u.path == "/api/mes_demo":
+            # Demostracion L11 (docente): crea una orden en Odoo y la pasa al MES. Lo hace el panel porque
+            # el navegador, con el portal por HTTPS, no puede llamar al MES por HTTP (contenido mixto).
+            if not self._docente():
+                return self._json({"ok": False, "salida": "Solo el docente"}, 403)
+            import urllib.request
+            try:
+                n = int(q.get("cantidad", ["20"])[0])
+                with urllib.request.urlopen("http://host.docker.internal:8095/api/crear_orden?cantidad=%d" % n, timeout=20) as r:
+                    d = json.loads(r.read().decode())
+                if d.get("ok"):
+                    urllib.request.urlopen("http://host.docker.internal:8095/api/nueva_orden", timeout=10).read()
+                return self._json(d)
+            except Exception as e:
+                return self._json({"ok": False, "error": str(e)[:200]})
         if u.path == "/api/practica_montar":
             ok, txt = montar_practica(q.get("id", [""])[0])
             return self._json({"ok": ok, "salida": txt})
@@ -1244,4 +1259,12 @@ if __name__ == "__main__":
     for h in HMIS.values():
         h.iniciar()
     print("Panel del laboratorio en http://localhost:%d" % PUERTO, flush=True)
-    ThreadingHTTPServer(("0.0.0.0", PUERTO), Atender).serve_forever()
+    srv = ThreadingHTTPServer(("0.0.0.0", PUERTO), Atender)
+    cert, llave = "/tablero/run/certs/cert.pem", "/tablero/run/certs/key.pem"
+    if os.path.isfile(cert) and os.path.isfile(llave):      # lab.ps1 compartir: HTTPS con certificado propio
+        import ssl
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(cert, llave)
+        srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+        print("Panel por HTTPS (certificado propio)", flush=True)
+    srv.serve_forever()

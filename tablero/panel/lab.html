@@ -257,7 +257,7 @@ let ultimo = null;
 let serieTxt = "";
 let enEditor = false;
 
-$("f3d").src = "http://" + host + ":8091/";
+$("f3d").src = location.protocol + "//" + host + ":8091/";
 $("f3d").addEventListener("load", () => $("p-3d").className = "punto ok");
 
 // ── Selección de equipo ─────────────────────────────────────────────────
@@ -605,14 +605,13 @@ async function demostracion() {
   msg("2/4 Cableando la solución…"); await cablearSolucion(); await dormir(1000);
   msg("3/4 Cargando el programa en el PLC…"); await subirSolucion(); await dormir(1500);
   if (!practica.demo_mes) { msg("Listo."); return; }
-  const mes = "http://localhost:8095";
+  const mes = "http://" + host + ":8095";
   for (let k = 0; k < 60; k++) {                       // Odoo y el MES tardan la primera vez
     msg("4/4 Esperando a Odoo y al MES (la primera vez ~2-4 min)… " + (k * 5) + " s");
     try {
-      const r = await (await fetch(mes + "/api/crear_orden?cantidad=" + practica.demo_mes)).json();
+      const r = await (await fetch("/api/mes_demo?cantidad=" + practica.demo_mes, {method: "POST"})).json();
       if (r.ok) {
-        await fetch(mes + "/api/nueva_orden");
-        msg('Listo: orden <b>' + esc(r.nombre) + '</b> en marcha. MES: <a href="' + mes + '" target="_blank">:8095</a> · Odoo: <a href="http://localhost:8069" target="_blank">:8069</a> (admin/admin)');
+        msg('Listo: orden <b>' + esc(r.nombre) + '</b> en marcha. MES: <a href="' + mes + '" target="_blank">:8095</a> · Odoo: <a href="http://' + host + ':8069" target="_blank">:8069</a> (admin/admin)');
         return;
       }
     } catch (_) {}

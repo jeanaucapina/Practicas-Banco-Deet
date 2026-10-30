@@ -1,0 +1,11 @@
+# Solo para `.\lab.ps1 compartir`: publica el portal y el 3D en TODAS las interfaces del PC
+# (por defecto solo en 127.0.0.1) para que otra persona de la misma red los abra por IP.
+# No lo uses en una red que no sea de confianza: el portal ejecuta acciones de Docker.
+services:
+  panel:
+    ports: !override ["0.0.0.0:8090:8090"]
+  web:
+    ports: !override ["0.0.0.0:8091:8091"]
+    volumes:
+      - ./run/web:/srv/web_local:ro
+      - ./run/certs:/certs:ro

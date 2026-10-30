@@ -170,6 +170,11 @@ switch ($accion) {
         Registrar-Esquema
         Web-Target
         docker @compose up -d --build
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host ""
+            Write-Host "No se pudo levantar el banco (el error esta arriba). Revisa que Docker Desktop este en Running, que haya internet y 20 GB libres, y repite." -ForegroundColor Red
+            exit 1
+        }
         docker @todos create --build openplc1 openplc2 nodered 2>$null | Out-Null
         docker @todos up -d --build editor 2>$null | Out-Null
         Write-Host ""
@@ -178,6 +183,51 @@ switch ($accion) {
         Write-Host "  Tablero 3D solo:                              http://localhost:8091"
         Write-Host "  Para apagarlo todo:  .\lab.ps1 parar" -ForegroundColor Cyan
         Start-Process "http://localhost:8090/lab"
+    }
+    "compartir" {
+        # Abre el portal (8090), el 3D (8091), Odoo (8069) y el MES (8095) a OTRAS personas de tu red,
+        # por tu IP. Solo para una prueba corta en una red de confianza. `.\lab.ps1 compartir parar` lo cierra.
+        Docker-Listo
+        $ov = "$raiz\tablero\docker-compose.compartir.yml"
+        $cmp = @("compose", "-f", "$raiz\tablero\docker-compose.yml", "-f", $ov, "--profile", "pasarela")
+        $nor = @("compose", "-f", "$raiz\tablero\docker-compose.yml", "--profile", "pasarela")
+        $l11 = "$raiz\tablero\run\pc\L11\docker-compose.yml"
+        $ov11 = "$env:TEMP\l11-compartir.yml"
+        Set-Content -Path $ov11 -Encoding ASCII -Value "services:`n  odoo:`n    ports: !override [`"0.0.0.0:8069:8069`"]`n  mes:`n    ports: !override [`"0.0.0.0:8095:8095`"]"
+        $l11arriba = (docker ps --format "{{.Names}}" | Select-String -SimpleMatch "l11-mes") -ne $null
+        if ($preset -eq "parar") {
+            docker @nor up -d panel web
+            if ($l11arriba) { docker compose -p l11 -f $l11 up -d odoo mes }
+            Remove-NetFirewallRule -DisplayName "Banco DEET compartir" -ErrorAction SilentlyContinue
+            Remove-Item "$raiz\tablero\run\certs" -Recurse -Force -ErrorAction SilentlyContinue
+            docker @nor up -d --force-recreate panel web
+            Write-Host "Compartir cerrado: portal y 3D vuelven a ser solo de este PC." -ForegroundColor Green
+            break
+        }
+        # HTTPS con certificado propio: sin el, el 3D no arranca desde otro PC (Godot web exige contexto seguro).
+        $ipc = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null } | Select-Object -First 1).IPv4Address.IPAddress
+        $dc = "$raiz\tablero\run\certs"
+        New-Item -ItemType Directory -Force $dc | Out-Null
+        if (-not (Test-Path "$dc\cert.pem") -or ((Get-Content "$dc\ip.txt" -ErrorAction SilentlyContinue) -ne $ipc)) {
+            Write-Host "Generando certificado propio para $ipc ..."
+            docker run --rm --entrypoint openssl -v "${dc}:/c" tablero-web req -x509 -newkey rsa:2048 -nodes -days 365 -keyout /c/key.pem -out /c/cert.pem -subj "/CN=banco-deet" -addext "subjectAltName=IP:$ipc,IP:127.0.0.1,DNS:localhost" 2>$null | Out-Null
+            Set-Content -Path "$dc\ip.txt" -Value $ipc -Encoding ASCII
+        }
+        docker @cmp up -d --build panel web
+        if ($LASTEXITCODE -ne 0) { Write-Host "No se pudo publicar el portal." -ForegroundColor Red; exit 1 }
+        if ($l11arriba) { docker compose -p l11 -f $l11 -f $ov11 up -d odoo mes }
+        try {
+            New-NetFirewallRule -DisplayName "Banco DEET compartir" -Direction Inbound -Protocol TCP -LocalPort 8090,8091,8069,8095 -Action Allow -Profile Private,Domain -ErrorAction Stop | Out-Null
+        } catch {
+            Write-Host "Aviso: no pude abrir el firewall (necesita PowerShell como administrador). Si la otra persona no conecta, ejecuta como administrador:" -ForegroundColor Yellow
+            Write-Host "  New-NetFirewallRule -DisplayName 'Banco DEET compartir' -Direction Inbound -Protocol TCP -LocalPort 8090,8091,8069,8095 -Action Allow -Profile Private,Domain"
+        }
+        $ip = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null } | Select-Object -First 1).IPv4Address.IPAddress
+        Write-Host ""
+        Write-Host "  Pasa esta direccion a quien va a probar (misma red):" -ForegroundColor Green
+        Write-Host "    Portal:  https://${ip}:8090/lab   (aviso del navegador: Avanzado > Continuar; repite en https://${ip}:8091)"
+        if ($l11arriba) { Write-Host "    MES:     http://${ip}:8095     Odoo: http://${ip}:8069  (admin / admin)" }
+        Write-Host "  Cerrar al terminar:  .\lab.ps1 compartir parar" -ForegroundColor Cyan
     }
     "ventana" {
         # Tablero 3D en una VENTANA NATIVA (Godot de escritorio), no en el navegador. Usa
