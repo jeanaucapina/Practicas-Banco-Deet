@@ -99,10 +99,17 @@ def orden_desde_odoo():
         return None       # ERP caido o sin modulo MRP: seguimos con la demo
 
 
+_avance_odoo = {"hecho": -1, "ocupado": False}
+
+
 def cerrar_en_odoo(o):
     """Orden terminada: el MES la marca HECHA en Odoo (lazo hacia arriba), para que no vuelva a tomarla."""
     if o.get("origen") != "odoo" or not o.get("odoo_id"):
         return
+    for _ in range(30):                                    # que termine un aviso de avance en vuelo
+        if not _avance_odoo["ocupado"]:
+            break
+        time.sleep(0.1)
     try:
         uid = _odoo_rpc("common", "login", [ODOO_DB, ODOO_USER, ODOO_PASS])
         ctx = {"skip_immediate": True, "skip_backorder": True, "skip_consumption": True}
@@ -112,6 +119,29 @@ def cerrar_en_odoo(o):
                                            [[o["odoo_id"]]], {"context": ctx}])
     except Exception as e:
         estado["ult_error"] = "no se pudo cerrar la orden en Odoo: %s" % e
+
+
+def avance_en_odoo(o):
+    """Mientras se fabrica, Odoo muestra la orden «En curso»: se le informa de las piezas hechas
+    (cantidad producida entre 1 y objetivo-1; al llegar al objetivo la cierra cerrar_en_odoo)."""
+    if o.get("origen") != "odoo" or not o.get("odoo_id") or _avance_odoo["ocupado"]:
+        return
+    n = min(int(o["producidas"]), int(o["objetivo"]) - 1)
+    if n < 1 or n == _avance_odoo["hecho"]:
+        return
+    _avance_odoo["ocupado"] = True
+
+    def enviar():
+        try:
+            uid = _odoo_rpc("common", "login", [ODOO_DB, ODOO_USER, ODOO_PASS])
+            _odoo_rpc("object", "execute_kw", [ODOO_DB, uid, ODOO_PASS, "mrp.production", "write",
+                                               [[o["odoo_id"]], {"qty_producing": n}]])
+            _avance_odoo["hecho"] = n
+        except Exception as e:
+            estado["ult_error"] = "no se pudo informar el avance a Odoo: %s" % e
+        finally:
+            _avance_odoo["ocupado"] = False
+    threading.Thread(target=enviar, daemon=True).start()
 
 
 def tomar_orden():
@@ -137,6 +167,7 @@ def lazo_mes():
                     estado["piezas_base"] = None
                     estado["arranque_ts"] = time.time()
                     salidas.clear()
+                    _avance_odoo["hecho"] = -1
                 o = estado["orden"]
             en_curso = o["estado"] == "en curso"
             terminada = None
@@ -179,6 +210,8 @@ def lazo_mes():
                     poner(cli, REG_AVANCE2, 1)
                     poner(cli, REG_CINTA, 0)               # la cinta se detiene
                     terminada = dict(o)
+            if en_curso and not terminada:
+                avance_en_odoo(dict(o))
             if terminada:
                 cerrar_en_odoo(terminada)                  # fuera del cerrojo: Odoo puede tardar
         except Exception as e:
