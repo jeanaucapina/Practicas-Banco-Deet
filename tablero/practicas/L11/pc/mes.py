@@ -22,7 +22,7 @@ import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import requests
 from pymodbus.client import ModbusTcpClient
@@ -66,11 +66,11 @@ def poner(cli, reg, valor):
 
 
 # ---- Odoo (nivel 4): pedir ordenes de fabricacion por JSON-RPC ------------------------
-def _odoo_rpc(servicio, metodo, args):
+def _odoo_rpc(servicio, metodo, args, espera=5):
     r = requests.post(ODOO.rstrip("/") + "/jsonrpc", json={
         "jsonrpc": "2.0", "method": "call",
         "params": {"service": servicio, "method": metodo, "args": args},
-    }, timeout=5)
+    }, timeout=espera)
     r.raise_for_status()
     d = r.json()
     if d.get("error"):
@@ -142,6 +142,54 @@ def avance_en_odoo(o):
         finally:
             _avance_odoo["ocupado"] = False
     threading.Thread(target=enviar, daemon=True).start()
+
+
+def preparar_odoo():
+    """Deja Odoo listo la primera vez: crea la base, instala Fabricacion y crea el producto
+    «Pieza banco DEET». La ORDEN de fabricacion la crea el alumno (es la parte del ERP).
+    Es idempotente: si ya esta todo, no hace nada."""
+    if not ODOO:
+        return
+    base = ODOO.rstrip("/")
+    for _ in range(120):                                   # Odoo tarda ~1 min en arrancar
+        try:
+            if requests.get(base + "/web/login", timeout=3).status_code < 500:
+                break
+        except Exception:
+            pass
+        time.sleep(5)
+    try:
+        bases = _odoo_rpc("db", "list", [])
+        if ODOO_DB not in bases:
+            estado["preparando_odoo"] = "creando la base de datos (1-2 min)"
+            requests.post(base + "/web/database/create", timeout=600, allow_redirects=False, data={
+                "master_pwd": "admin", "name": ODOO_DB, "login": ODOO_USER, "password": ODOO_PASS,
+                "phone": "", "lang": "es_ES", "country_code": "ec"})
+        uid = _odoo_rpc("common", "login", [ODOO_DB, ODOO_USER, ODOO_PASS])
+        ek = lambda m, f, a, k=None: _odoo_rpc("object", "execute_kw", [ODOO_DB, uid, ODOO_PASS, m, f, a, k or {}], 900)
+        if not ek("ir.module.module", "search", [[["name", "=", "mrp"], ["state", "=", "installed"]]]):
+            estado["preparando_odoo"] = "instalando Fabricacion (1-2 min)"
+            ids = ek("ir.module.module", "search", [[["name", "=", "mrp"]]])
+            ek("ir.module.module", "button_immediate_install", [ids])
+        if not ek("product.product", "search", [[["name", "=", "Pieza banco DEET"]]]):
+            ek("product.product", "create", [{"name": "Pieza banco DEET", "type": "consu"}])
+        estado["preparando_odoo"] = ""
+    except Exception as e:
+        estado["preparando_odoo"] = ""
+        estado["ult_error"] = "no se pudo preparar Odoo: %s" % e
+
+
+def crear_orden_odoo(cantidad):
+    """Demostracion: crea y confirma en Odoo una orden de fabricacion de `cantidad` piezas."""
+    uid = _odoo_rpc("common", "login", [ODOO_DB, ODOO_USER, ODOO_PASS])
+    ek = lambda m, f, a: _odoo_rpc("object", "execute_kw", [ODOO_DB, uid, ODOO_PASS, m, f, a], 60)
+    prod = ek("product.product", "search", [[["name", "=", "Pieza banco DEET"]]])
+    if not prod:
+        raise RuntimeError("Odoo aun se esta preparando (producto no creado)")
+    mo = ek("mrp.production", "create", [[{"product_id": prod[0], "product_qty": cantidad}]])
+    mo = mo[0] if isinstance(mo, list) else mo
+    ek("mrp.production", "action_confirm", [[mo]])
+    return ek("mrp.production", "read", [[mo], ["name"]])[0]["name"]
 
 
 def tomar_orden():
@@ -330,7 +378,8 @@ PAGINA = """<!doctype html><html lang=es><meta charset=utf-8>
  <section class="tarjeta full">
   <p class=k>Eventos</p>
   <ul class=eventos id=eventos></ul>
-  <p style="margin:10px 0 0"><button onclick="nueva()">Tomar la siguiente orden</button></p>
+  <p style="margin:10px 0 0"><button onclick="nueva()">Tomar la siguiente orden</button>
+   <button onclick="crear()" title="Crea y confirma una orden en Odoo (para la demostracion)">Crear orden de ejemplo en Odoo</button></p>
  </section>
 </main>
 <script>
@@ -339,6 +388,9 @@ const pct=x=>Math.round((x||0)*100)+" %";
 let ant={}, eventos=[];
 function evento(t){const h=new Date().toLocaleTimeString("es-EC",{hour12:false});eventos.unshift([h,t]);eventos=eventos.slice(0,40);
  $("eventos").innerHTML=eventos.map(e=>`<li><time>${e[0]}</time><span>${e[1]}</span></li>`).join("");}
+async function crear(){const n=parseInt(prompt("Piezas de la orden","20"),10);if(!n||n<1)return;
+ const r=await(await fetch("api/crear_orden?cantidad="+n)).json();
+ evento(r.ok?"ERP: orden "+r.nombre+" creada ("+n+" piezas). Pulsa «Tomar la siguiente orden»":"No se pudo crear la orden: "+r.error);}
 async function nueva(){await fetch("api/nueva_orden");evento("Operador: pedir la siguiente orden al ERP");}
 function grafica(d){
  const h=d.historico||[], o=d.orden||{}, W=600, H=200, P=24, obj=Math.max(1,o.objetivo||1);
@@ -397,6 +449,7 @@ class Mango(BaseHTTPRequestHandler):
     def _responder(self, codigo, tipo, cuerpo):
         self.send_response(codigo)
         self.send_header("Content-Type", tipo)
+        self.send_header("Access-Control-Allow-Origin", "*")     # el portal docente (otro puerto) lee /api/crear_orden
         self.send_header("Content-Length", str(len(cuerpo)))
         self.end_headers()
         self.wfile.write(cuerpo)
@@ -419,6 +472,13 @@ class Mango(BaseHTTPRequestHandler):
         if ruta == "/api/salud":
             return self._responder(200, "application/json",
                                    json.dumps({"ok": True, "plc": estado["plc_conectado"]}).encode())
+        if ruta == "/api/crear_orden":          # demostracion: crea una orden en Odoo
+            try:
+                n = int((parse_qs(urlparse(self.path).query).get("cantidad") or ["20"])[0])
+                d = {"ok": True, "nombre": crear_orden_odoo(max(1, min(n, 500)))}
+            except Exception as e:
+                d = {"ok": False, "error": str(e)[:200]}
+            return self._responder(200, "application/json", json.dumps(d).encode())
         if ruta == "/api/nueva_orden":          # el alumno fuerza una orden nueva (demo)
             with cerrojo:
                 estado["orden"] = None
@@ -427,6 +487,7 @@ class Mango(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    threading.Thread(target=preparar_odoo, daemon=True).start()
     threading.Thread(target=lazo_mes, daemon=True).start()
     print("MES escuchando en :8095  (PLC %s:%d, Odoo %s)" % (PLC_HOST, PLC_PORT, ODOO or "-"), flush=True)
     ThreadingHTTPServer(("0.0.0.0", 8095), Mango).serve_forever()

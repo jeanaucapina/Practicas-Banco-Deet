@@ -543,6 +543,9 @@ async function elegirPractica(id) {
   const sol = practica.solucion_equipos || (practica.solucion_ejemplo ? [[practica.equipo, practica.solucion_ejemplo]] : []);
   if (practica.solucion_cables) html += '<div class="docente-sol"><b>Cableado de la solución (docente)</b>: ' +
     practica.solucion_cables.length + ' hilos. <button onclick="cablearSolucion()">Cablear solución</button><div class="etq" id="cab-res"></div></div>';
+  if (practica.solucion_cables && (sol.length || practica.demo_mes)) html += '<div class="docente-sol"><b>Demostración (docente)</b>: prepara, cablea la solución, carga el programa en el PLC' +
+    (practica.demo_mes ? ' y crea una orden en Odoo que el MES ejecuta (motor y lámparas del tablero)' : '') +
+    '. <button class="prim" onclick="demostracion()">▶ Demostración completa</button><div class="etq" id="demo-res"></div></div>';
   if (sol.length) html += '<div class="docente-sol"><b>Solución (docente)</b>: ' +
     sol.map(s => "<code>" + esc(s[1]) + "</code> → " + esc(s[0])).join(", ") +
     ' <button onclick="subirSolucion()">Subir solución</button><div class="etq" id="sol-res"></div></div>';
@@ -595,6 +598,28 @@ async function limpiarCache() {
   $("espacio-res").textContent = r.salida; espacio(true);
 }
 function ejemplos() { document.getElementById("t-serie").scrollIntoView({behavior: "smooth"}); }
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+async function demostracion() {
+  const msg = s => { $("demo-res").innerHTML = s; };
+  msg("1/4 Preparando el tablero…"); await prepararPractica(); await dormir(3000);
+  msg("2/4 Cableando la solución…"); await cablearSolucion(); await dormir(1000);
+  msg("3/4 Cargando el programa en el PLC…"); await subirSolucion(); await dormir(1500);
+  if (!practica.demo_mes) { msg("Listo."); return; }
+  const mes = "http://localhost:8095";
+  for (let k = 0; k < 60; k++) {                       // Odoo y el MES tardan la primera vez
+    msg("4/4 Esperando a Odoo y al MES (la primera vez ~2-4 min)… " + (k * 5) + " s");
+    try {
+      const r = await (await fetch(mes + "/api/crear_orden?cantidad=" + practica.demo_mes)).json();
+      if (r.ok) {
+        await fetch(mes + "/api/nueva_orden");
+        msg('Listo: orden <b>' + esc(r.nombre) + '</b> en marcha. MES: <a href="' + mes + '" target="_blank">:8095</a> · Odoo: <a href="http://localhost:8069" target="_blank">:8069</a> (admin/admin)');
+        return;
+      }
+    } catch (_) {}
+    await dormir(5000);
+  }
+  msg("No se pudo crear la orden: revisa que Odoo y el MES estén arriba (docker ps).");
+}
 async function cablearSolucion() {
   const r = await (await fetch("/api/cablear_solucion?id=" + practica.id, {method: "POST"})).json();
   if (r.ok && (r.modulos || []).length) {
