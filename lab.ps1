@@ -34,8 +34,7 @@ Laboratorio VR en Windows: todo lo que corre en Docker, en un solo sitio.
   .\lab.ps1 estado      que esta corriendo y cuanta memoria/CPU gasta
   .\lab.ps1 logs        registro de la pasarela en vivo (Ctrl+C para salir)
   .\lab.ps1 apk [preset] compila e instala el APK en las gafas por USB
-                         presets: "Quest Win" (KukaLab, por defecto) | "Quest Tablero Win" |
-                         "Quest Comunicaciones Win" (laboratorio De Lorenzo de AM)
+                         presets: "Quest Win" (KukaLab, por defecto) | "Quest Tablero Win"
                          Los Win llevan otro identificador (.win): las apps firmadas en el
                          PC Linux no se pueden actualizar desde aqui y conviven con estas.
 
@@ -199,19 +198,8 @@ switch ($accion) {
             docker @nor up -d panel web
             if ($l11arriba) { docker compose -p l11 -f $l11 up -d odoo mes }
             Remove-NetFirewallRule -DisplayName "Banco DEET compartir" -ErrorAction SilentlyContinue
-            Remove-Item "$raiz\tablero\run\certs" -Recurse -Force -ErrorAction SilentlyContinue
-            docker @nor up -d --force-recreate panel web
             Write-Host "Compartir cerrado: portal y 3D vuelven a ser solo de este PC." -ForegroundColor Green
             break
-        }
-        # HTTPS con certificado propio: sin el, el 3D no arranca desde otro PC (Godot web exige contexto seguro).
-        $ipc = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null } | Select-Object -First 1).IPv4Address.IPAddress
-        $dc = "$raiz\tablero\run\certs"
-        New-Item -ItemType Directory -Force $dc | Out-Null
-        if (-not (Test-Path "$dc\cert.pem") -or ((Get-Content "$dc\ip.txt" -ErrorAction SilentlyContinue) -ne $ipc)) {
-            Write-Host "Generando certificado propio para $ipc ..."
-            docker run --rm --entrypoint openssl -v "${dc}:/c" tablero-web req -x509 -newkey rsa:2048 -nodes -days 365 -keyout /c/key.pem -out /c/cert.pem -subj "/CN=banco-deet" -addext "subjectAltName=IP:$ipc,IP:127.0.0.1,DNS:localhost" 2>$null | Out-Null
-            Set-Content -Path "$dc\ip.txt" -Value $ipc -Encoding ASCII
         }
         docker @cmp up -d --build panel web
         if ($LASTEXITCODE -ne 0) { Write-Host "No se pudo publicar el portal." -ForegroundColor Red; exit 1 }
@@ -225,7 +213,7 @@ switch ($accion) {
         $ip = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null } | Select-Object -First 1).IPv4Address.IPAddress
         Write-Host ""
         Write-Host "  Pasa esta direccion a quien va a probar (misma red):" -ForegroundColor Green
-        Write-Host "    Portal:  https://${ip}:8090/lab   (aviso del navegador: Avanzado > Continuar; repite en https://${ip}:8091)"
+        Write-Host "    Portal:  http://${ip}:8090/lab"
         if ($l11arriba) { Write-Host "    MES:     http://${ip}:8095     Odoo: http://${ip}:8069  (admin / admin)" }
         Write-Host "  Cerrar al terminar:  .\lab.ps1 compartir parar" -ForegroundColor Cyan
     }

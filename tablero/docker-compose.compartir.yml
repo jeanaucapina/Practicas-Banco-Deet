@@ -6,6 +6,3 @@ services:
     ports: !override ["0.0.0.0:8090:8090"]
   web:
     ports: !override ["0.0.0.0:8091:8091"]
-    volumes:
-      - ./run/web:/srv/web_local:ro
-      - ./run/certs:/certs:ro

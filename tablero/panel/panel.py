@@ -1259,12 +1259,4 @@ if __name__ == "__main__":
     for h in HMIS.values():
         h.iniciar()
     print("Panel del laboratorio en http://localhost:%d" % PUERTO, flush=True)
-    srv = ThreadingHTTPServer(("0.0.0.0", PUERTO), Atender)
-    cert, llave = "/tablero/run/certs/cert.pem", "/tablero/run/certs/key.pem"
-    if os.path.isfile(cert) and os.path.isfile(llave):      # lab.ps1 compartir: HTTPS con certificado propio
-        import ssl
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ctx.load_cert_chain(cert, llave)
-        srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
-        print("Panel por HTTPS (certificado propio)", flush=True)
-    srv.serve_forever()
+    ThreadingHTTPServer(("0.0.0.0", PUERTO), Atender).serve_forever()
