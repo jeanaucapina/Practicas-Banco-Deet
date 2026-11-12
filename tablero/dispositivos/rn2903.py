@@ -54,7 +54,7 @@ def frec_rx1(ch: int) -> int:
 def t_aire_ms(pl: int, sf: int, bw_khz: int, cr: int = 1, crc: bool = True, prlen: int = 8) -> float:
     """Tiempo en el aire (Semtech, AN1200.13). cr=1 es 4/5; cabecera explicita."""
     ts = (2 ** sf) / (bw_khz * 1000.0) * 1000.0
-    de = 1 if (bw_khz == 125 and sf >= 11) else 0
+    de = 1 if ts > 16.0 else 0            # optimizacion de baja tasa: simbolo > 16 ms (SF11/SF12 a 125 kHz y SF12 a 250 kHz)
     n = 8 + max(math.ceil((8 * pl - 4 * sf + 28 + 16 * (1 if crc else 0)) / (4.0 * (sf - 2 * de))) * (cr + 4), 0)
     return (prlen + 4.25 + n) * ts
 
@@ -294,8 +294,8 @@ class RN2903:
             await asyncio.sleep(0.002)          # lo que tarda el modulo en contestar
             try:
                 self._comando(linea)
-            except (ValueError, IndexError, KeyError):
-                self._resp("invalid_param")
+            except Exception:                   # cualquier comando raro del alumno (struct.error, TypeError...)
+                self._resp("invalid_param")     # no debe matar este bucle: el modulo dejaria de contestar
 
     def _comando(self, linea: str):
         p = linea.split()
@@ -513,7 +513,13 @@ class RN2903:
         try:
             self.unido = False
             hw = leer_hw(self.id)
-            devnonce = (int(hw.get("devnonce", random.randint(0, 200))) + 1) & 0xFFFF
+            # DevNonce: contador persistente (cada JoinRequest, uno mas) que arranca en un valor
+            # al azar de 16 bits. Un servidor de red v4 rechaza ("Invalid DevNonce") los ya usados
+            # por ese dispositivo, y "Preparar el tablero" borra rn2903.json: con un arranque en
+            # 0-200 el contador reiniciado chocaba con el historial y el nodo tardaba minutos en
+            # unirse (cada intento sube 1). El modulo real elige el suyo por su cuenta; esto es
+            # una simplificacion declarada (ver docs/L10_DOCENTE.md).
+            devnonce = (int(hw.get("devnonce", random.randint(0, 0xFFFF))) + 1) & 0xFFFF
             guardar_hw(self.id, {"devnonce": devnonce})
             appkey = bytes.fromhex(m["appkey"])
             msg = b"\x00" + bytes.fromhex(m["appeui"])[::-1] + bytes.fromhex(m["deveui"])[::-1] + \

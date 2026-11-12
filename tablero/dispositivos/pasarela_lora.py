@@ -52,8 +52,13 @@ G_ANT = 2.0                             # dBi de cada antena
 SIN_ANTENA = 30.0                       # dB que se pierden sin antena (desadaptacion)
 AVERIA = 35.0                           # etapa de potencia danada
 SOMBRA = 3.0                            # sigma [dB] de la sombra aleatoria por trama
-FIGURA_RUIDO = 6.0
-SNR_MIN = {7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0}
+# Receptor calibrado con la hoja de datos del HT-M7603 (SX1303 + SX1250, Rev. 1.0, tabla 2.4, a 125 kHz):
+# SF12 -139 dBm, SF10 -134, SF7 -125. Con esos tres puntos la figura de ruido sale de 4 dB (no 6) y la
+# SNR minima, sensibilidad - ruido (-119,0 dBm a 125 kHz): SF7 -6,0, SF10 -15,0, SF12 -20,0 dB. SF8, SF9
+# y SF11 NO estan en la hoja: se interpolan en lineal sobre la sensibilidad (3 dB/SF de SF7 a SF10 y
+# 2,5 dB/SF de SF10 a SF12). A 500 kHz la sensibilidad empeora 6 dB (el ruido x4), sin dato de la hoja.
+FIGURA_RUIDO = 4.0
+SNR_MIN = {7: -6.0, 8: -9.0, 9: -12.0, 10: -15.0, 11: -17.5, 12: -20.0}
 POT_PASARELA = 26.0                     # dBm maximos de la pasarela (los limita powe)
 
 
@@ -306,7 +311,9 @@ class Pasarela:
         elif ident == 0x03:                     # PULL_RESP: un descendente
             try:
                 txpk = json.loads(data[4:])["txpk"]
-            except (ValueError, KeyError):
+            except (ValueError, KeyError, TypeError):
+                return
+            if not isinstance(txpk, dict):
                 return
             asyncio.ensure_future(self.descendente(token, txpk))
 
