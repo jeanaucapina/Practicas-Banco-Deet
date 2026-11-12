@@ -65,6 +65,22 @@ class Equipo:
         self.lineas = {}
         self._en_par = []             # tramas recientes en el par (propias y ajenas)
 
+    def lanzar(self, fabrica, nombre=""):
+        """ensure_future con vigilante: si el bucle muere por una excepcion (una trama rara,
+        un registro con un valor imprevisto...) se anota y se relanza en 1 s. Un
+        ensure_future suelto moria en silencio y dejaba el equipo a medias."""
+        async def vigilante():
+            while True:
+                try:
+                    return await fabrica()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    self.anotar("%s fallo (%s: %s): se reinicia" % (nombre or getattr(fabrica, "__name__", "tarea"),
+                                                                 type(e).__name__, e))
+                    await asyncio.sleep(1.0)
+        return asyncio.ensure_future(vigilante())
+
     # ── Registro ──────────────────────────────────────────────────────────────
     def anotar(self, txt: str):
         self.log.append(time.strftime("%H:%M:%S ") + txt)

@@ -110,7 +110,12 @@ def ahora():
 
 
 def docker(*args) -> tuple:
-    r = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=15)
+    try:
+        r = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=15)
+    except subprocess.TimeoutExpired:       # un demonio colgado no debe tumbar los bucles de la pasarela
+        return 124, "docker %s no contesto en 15 s" % (args[0] if args else "")
+    except OSError as e:
+        return 127, "no se pudo ejecutar docker: %s" % e
     return r.returncode, (r.stdout + r.stderr).strip()
 
 
@@ -163,8 +168,10 @@ class Pasarela:
             self.cables = {}
 
     def _guardar(self):
-        with open(FICHERO_CABLES, "w") as f:
+        tmp = FICHERO_CABLES + ".tmp"          # atomico: un corte a medias no deja el JSON roto (y sin cables)
+        with open(tmp, "w") as f:
             json.dump(self.cables, f, indent=1)
+        os.replace(tmp, FICHERO_CABLES)
 
     # ── Topologia ─────────────────────────────────────────────────────────────
     def _otro_extremo(self, puerto):
@@ -576,8 +583,10 @@ class Pasarela:
                 d = json.loads(data)
             except ValueError:
                 return
+            if not isinstance(d, dict):
+                return
             nom = d.get("equipo")
-            if nom in EQUIPOS:
+            if isinstance(nom, str) and nom in EQUIPOS:
                 antes = (self.pas.equipos.get(nom) or {}).get("red_pedida")
                 self.pas.equipos[nom] = d
                 self.pas.visto[nom] = time.time()
@@ -860,8 +869,10 @@ class Pasarela:
                     break
                 try:
                     await self.mensaje(json.loads(linea), escritor)
-                except (ValueError, KeyError, TypeError) as e:
+                except (ValueError, KeyError, TypeError, AttributeError) as e:    # AttributeError: JSON que no es un objeto
                     self.evento("mensaje malo: %s" % e)
+                except Exception as e:             # un fallo de docker/aplicar no debe cortar a las gafas
+                    self.evento("error atendiendo %r: %s: %s" % ((linea[:40]), type(e).__name__, e))
         except (ConnectionError, OSError):
             pass
         self.clientes.discard(escritor)
@@ -935,6 +946,18 @@ class Pasarela:
             await asyncio.sleep(3.0)
             await self._sincronizar(avisar=False)
 
+    async def _vigilar(self, f):
+        """Relanza un bucle de fondo si muere por una excepcion (antes moria en silencio y la
+        pasarela seguia viva pero sin difundir estado, reconciliar redes, etc.)."""
+        while True:
+            try:
+                return await f()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                self.evento("el bucle %s fallo (%s: %s): se reinicia" % (f.__name__, type(e).__name__, e))
+                await asyncio.sleep(2.0)
+
     async def correr(self):
         loop = asyncio.get_running_loop()
         await loop.create_datagram_endpoint(lambda: Pasarela._ProtoEstado(self),
@@ -955,7 +978,7 @@ class Pasarela:
         self.evento("esperando a las gafas en el puerto %d" % PUERTO_GAFAS)
         for f in (self._bucle_difusion, self._bucle_contadores, self._baliza,
                   self._bucle_reconciliar, self._bucle_captura, self._bucle_segmentos, self._bucle_otlab):
-            asyncio.ensure_future(f())
+            asyncio.ensure_future(self._vigilar(f))
         async with srv:
             await srv.serve_forever()
 

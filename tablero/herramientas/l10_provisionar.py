@@ -4,9 +4,14 @@ del tablero. Es lo que el alumno hace a mano en la web en la Parte I (Paso 4); s
 al docente para preparar una demostracion y a las pruebas del banco.
 
     python tablero/herramientas/l10_provisionar.py [--servidor 127.0.0.1:8089]
-        [--deveui 0004A30B001F7A01] [--joineui ...] [--appkey ...]
+        [--deveui 0004A30B001F7A01] [--joineui ...] [--appkey ...] [--recrear]
 
 Imprime el JoinEUI y la AppKey para copiarlos al programa del nodo.
+
+Es idempotente: ejecutarlo otra vez NO toca un dispositivo que ya existe con esos datos
+(el nodo unido sigue unido) y conserva su AppKey si no pasas --appkey. Con --recrear borra
+el dispositivo y lo da de alta de nuevo (se pierden la sesion y el historial de DevNonce; el
+nodo tarda en notarlo: ver docs/L10_DOCENTE.md).
 Necesita: pip install chirpstack-api
 """
 
@@ -32,8 +37,10 @@ def main():
     ap.add_argument("--nombre", default="banco-t1")
     ap.add_argument("--joineui", default="70B3D57ED0000010")
     ap.add_argument("--appkey", default="")
+    ap.add_argument("--json", default="", help="escribe aqui los ids (tenant, aplicacion, dispositivo) para el panel")
+    ap.add_argument("--recrear", action="store_true",
+                    help="borra y recrea el dispositivo aunque ya exista (pierde la sesion del nodo)")
     a = ap.parse_args()
-    appkey = a.appkey or secrets.token_hex(16).upper()
 
     canal = grpc.insecure_channel(a.servidor)
     tok = api.InternalServiceStub(canal).Login(api.LoginRequest(email=a.usuario, password=a.clave)).jwt
@@ -74,19 +81,53 @@ def main():
         print("aplicacion informatica-industrial creada")
 
     ds = api.DeviceServiceStub(canal)
+    eui = a.deveui.lower()
+    existe, clave_actual = True, ""
     try:
-        ds.Delete(api.DeleteDeviceRequest(dev_eui=a.deveui.lower()), metadata=md)
+        ds.Get(api.GetDeviceRequest(dev_eui=eui), metadata=md)
     except grpc.RpcError:
-        pass
-    ds.Create(api.CreateDeviceRequest(device=api.Device(
-        dev_eui=a.deveui.lower(), name=a.nombre, application_id=app, device_profile_id=dp,
-        join_eui=a.joineui.lower(), skip_fcnt_check=False)), metadata=md)
-    ds.CreateKeys(api.CreateDeviceKeysRequest(device_keys=api.DeviceKeys(
-        dev_eui=a.deveui.lower(), nwk_key=appkey.lower())), metadata=md)    # 1.0.x: nwk_key = AppKey
-    print("nodo %s (%s) registrado en la aplicacion %s" % (a.nombre, a.deveui, app))
+        existe = False
+    if existe:
+        try:
+            clave_actual = ds.GetKeys(api.GetDeviceKeysRequest(dev_eui=eui), metadata=md).device_keys.nwk_key.upper()
+        except grpc.RpcError:
+            clave_actual = ""
+    # La AppKey: la pedida, si no la que ya tiene el dispositivo, si no una nueva. Cambiarla en
+    # cada ejecucion dejaba al nodo con la clave vieja (ChirpStack: "Invalid MIC" para siempre).
+    appkey = (a.appkey or clave_actual or secrets.token_hex(16)).upper()
+    if existe and a.recrear:
+        ds.Delete(api.DeleteDeviceRequest(dev_eui=eui), metadata=md)
+        existe = False
+        print("dispositivo %s borrado; el nodo conserva una sesion que el servidor ya no conoce" % a.deveui)
+    dispositivo = api.Device(dev_eui=eui, name=a.nombre, application_id=app, device_profile_id=dp,
+                             join_eui=a.joineui.lower(), skip_fcnt_check=False)
+    if not existe:
+        ds.Create(api.CreateDeviceRequest(device=dispositivo), metadata=md)
+        ds.CreateKeys(api.CreateDeviceKeysRequest(device_keys=api.DeviceKeys(
+            dev_eui=eui, nwk_key=appkey.lower())), metadata=md)    # 1.0.x: nwk_key = AppKey
+        print("nodo %s (%s) registrado en la aplicacion %s" % (a.nombre, a.deveui, app))
+    else:
+        ds.Update(api.UpdateDeviceRequest(device=dispositivo), metadata=md)
+        if clave_actual and clave_actual != appkey:
+            ds.UpdateKeys(api.UpdateDeviceKeysRequest(device_keys=api.DeviceKeys(
+                dev_eui=eui, nwk_key=appkey.lower())), metadata=md)
+            print("nodo %s ya existia: AppKey CAMBIADA (reprograma el nodo con la nueva)" % a.deveui)
+        elif not clave_actual:
+            ds.CreateKeys(api.CreateDeviceKeysRequest(device_keys=api.DeviceKeys(
+                dev_eui=eui, nwk_key=appkey.lower())), metadata=md)
+            print("nodo %s ya existia sin claves: AppKey creada" % a.deveui)
+        else:
+            print("nodo %s ya existia con esa AppKey: no se toca (el nodo unido sigue unido)" % a.deveui)
     print("JOIN_EUI =", a.joineui.upper())
     print("APP_KEY  =", appkey)
     print("APP_ID   =", app)
+    print("TENANT_ID =", tenant)
+    if a.json:
+        import json
+        os.makedirs(os.path.dirname(os.path.abspath(a.json)), exist_ok=True)
+        with open(a.json, "w", encoding="utf-8") as f:     # sin la AppKey: solo los ids para el enlace directo
+            json.dump({"tenant_id": tenant, "app_id": app, "dev_eui": a.deveui.lower(), "nombre": a.nombre,
+                       "perfil_id": dp}, f)
 
 
 if __name__ == "__main__":

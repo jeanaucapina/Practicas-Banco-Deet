@@ -161,7 +161,7 @@ class Esp32Plc(Equipo):
                     cab = await asyncio.wait_for(r.readexactly(7), 1.0)
                     res.append(await asyncio.wait_for(
                         r.readexactly(struct.unpack(">H", cab[4:6])[0] - 1), 1.0))
-            except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError):
+            except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError, struct.error):
                 if conn is not None:
                     conn[1].close()
                 conn = None
@@ -169,7 +169,7 @@ class Esp32Plc(Equipo):
             di = bits_de_respuesta(res[0], 21)
             do = bits_de_respuesta(res[1], 24)
             hr = regs_de_respuesta(res[2])
-            if di is None or do is None or hr is None:
+            if di is None or do is None or not hr:
                 continue
             estado = {"pulsadores": {"I16": di[16], "I17": di[17], "I18": di[18]},
                       "entradas": di[:16], "IN": di[19:21], "salidas": do, "modo": hr[0]}
@@ -189,7 +189,7 @@ class Esp32Plc(Equipo):
     async def iniciar(self):
         await servidor_tcp(self.mapa, 1, 502, self.peticiones)
         for f in (self._bucle_mqtt, self._bucle_maestro, self._sensor, self._pasarela_mqtt):
-            asyncio.ensure_future(f())
+            self.lanzar(f)
 
     def estado(self):
         m = self.mapa

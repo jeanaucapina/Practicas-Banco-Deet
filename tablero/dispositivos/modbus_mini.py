@@ -101,6 +101,10 @@ class Mapa:
                 return pdu[:5]
             if fc == 15:
                 inicio, n, nb = struct.unpack(">HHB", pdu[1:6])
+                # Antes de tocar nada: un contador de bytes que no cuadra o una PDU truncada
+                # escribian la mitad de las bobinas y luego fallaban (IndexError).
+                if not 1 <= n <= 1968 or nb != (n + 7) // 8 or len(pdu) != 6 + nb:
+                    return self._exc(fc, EXC_VALOR_ILEGAL)
                 if inicio + n > len(self.bobinas):
                     return self._exc(fc, EXC_DIRECCION_ILEGAL)
                 bits = pdu[6:6 + nb]
@@ -110,7 +114,9 @@ class Mapa:
                 return pdu[:5]
             if fc == 16:
                 inicio, n, nb = struct.unpack(">HHB", pdu[1:6])
-                if inicio + n > len(self.holding) or nb != 2 * n:
+                if not 1 <= n <= 123 or nb != 2 * n or len(pdu) != 6 + nb:
+                    return self._exc(fc, EXC_VALOR_ILEGAL)
+                if inicio + n > len(self.holding):
                     return self._exc(fc, EXC_DIRECCION_ILEGAL)
                 for i in range(n):
                     self.holding[inicio + i] = struct.unpack(">H", pdu[6 + 2 * i:8 + 2 * i])[0]
@@ -130,10 +136,15 @@ async def servidor_tcp(mapa: Mapa, unidad: int = 1, puerto: int = 502, contador=
             while True:
                 cab = await lector.readexactly(7)
                 tid, proto, largo, uid = struct.unpack(">HHHB", cab)
+                if largo < 2 or largo > 260:       # MBAP invalido (la PDU cabe en 253 B): se corta, como un equipo real
+                    break
                 pdu = await lector.readexactly(largo - 1)
                 if proto != 0:
                     continue
-                resp = mapa.procesar(pdu)
+                try:
+                    resp = mapa.procesar(pdu)
+                except Exception:              # p. ej. la devolucion de llamada del equipo: error de esclavo, no conexion caida
+                    resp = bytes([(pdu[0] if pdu else 0) | 0x80, 0x04])
                 if contador is not None:
                     contador["tcp"] = contador.get("tcp", 0) + 1
                 escritor.write(struct.pack(">HHHB", tid, 0, len(resp) + 1, uid) + resp)
@@ -152,13 +163,15 @@ def pdu_leer(fc: int, inicio: int, n: int) -> bytes:
 
 
 def bits_de_respuesta(pdu: bytes, n: int):
-    if not pdu or pdu[0] & 0x80:
+    if not pdu or pdu[0] & 0x80 or len(pdu) < 2:
         return None
     datos = pdu[2:2 + pdu[1]]
+    if len(pdu) < 2 or len(datos) * 8 < n:       # respuesta truncada
+        return None
     return [(datos[i // 8] >> (i % 8)) & 1 for i in range(n)]
 
 
 def regs_de_respuesta(pdu: bytes):
-    if not pdu or pdu[0] & 0x80:
+    if not pdu or pdu[0] & 0x80 or len(pdu) < 2 or len(pdu) < 2 + pdu[1]:    # respuesta truncada
         return None
     return [struct.unpack(">H", pdu[2 + 2 * i:4 + 2 * i])[0] for i in range(pdu[1] // 2)]

@@ -160,5 +160,15 @@
         }
       ]
     }
-  ]
+  ],
+  "demo_lora": {
+    "periodo_ms": 20000,
+    "controllino": "controllino_esclavo_l10",
+    "esp32": "esp32plc_lora_pasarela",
+    "join_eui": "70B3D57ED0000010",
+    "dev_eui": "0004A30B001F7A01",
+    "a0": 600,
+    "a1": 300,
+    "espera_uplink_s": 300
+  }
 }

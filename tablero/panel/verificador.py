@@ -309,7 +309,12 @@ def correr(practica: dict, ctx: Contexto, al_paso=None, dormir=time.sleep) -> li
             al_paso(i, None)
         motivo = ""
         for accion in paso.get("hacer", []):
-            motivo = _hacer(accion, ctx, dormir)
+            try:
+                motivo = _hacer(accion, ctx, dormir)
+            except (KeyError, IndexError, ValueError, TypeError, AttributeError, re.error) as e:
+                # Un paso mal definido en practica.json (falta una clave, regex rota) o un dato
+                # raro del banco no debe abortar toda la comprobacion: ese paso falla y sigue.
+                motivo = "el paso no se pudo evaluar (%s: %s)" % (type(e).__name__, e)
             if motivo:
                 break
         r = {"txt": paso.get("txt", "paso %d" % (i + 1)), "ok": not motivo, "motivo": motivo}

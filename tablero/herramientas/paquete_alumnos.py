@@ -23,68 +23,13 @@ import shutil
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import readme_banco  # noqa: E402
+
 RAIZ = pathlib.Path(__file__).resolve().parents[2]
-INCLUIR = ["tablero", "lab.ps1", "docs/INSTALACION.md"]
+INCLUIR = ["tablero", "lab.ps1", "iniciar.cmd", "docs/INSTALACION.md", "docs/readme"]
 SIN_PREFIJO = ("tablero/DiseñoTablero", "tablero/Talleres Guia")
 SIN_EXT = (".rar", ".stp", ".iam", ".ipt")
-
-README = """# Banco virtual de Informática Industrial · DEET (Universidad de Cuenca)
-
-El tablero de comunicaciones del laboratorio, en tu PC: Controllino, ESP32 PLC, switch,
-HMI, OpenPLC, Node-RED, ChirpStack, Odoo/MES y Wireshark corren en Docker y los usas desde
-el navegador. Incluye el **portal de prácticas** (L0–L12, U2, U4, U6) con autocorrector.
-
-## Instalar
-
-1. Windows 10/11 con **Docker Desktop** (WSL 2) y **Git**. Disco libre: 20 GB.
-2. En PowerShell:
-
-```powershell
-git clone https://github.com/jeanaucapina/Practicas-Banco-Deet banco
-cd banco
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # una sola vez
-.\\lab.ps1 navegador
-```
-
-Se abre **http://localhost:8090/lab**. La primera vez tarda (construye las imágenes);
-después, menos de un minuto. Para apagarlo: `.\\lab.ps1 parar`.
-
-Requisitos, puertos, convivencia con ot-lab y problemas frecuentes:
-[docs/INSTALACION.md](docs/INSTALACION.md).
-
-## Actualizar
-
-```powershell
-git pull
-.\\lab.ps1 navegador
-```
-
-Ctrl+Shift+R en el navegador si el 3D no se actualiza.
-
-## Espacio en disco
-
-Las prácticas con servidor propio (L11 Odoo, L10 ChirpStack, FUXA…) bajan sus imágenes al
-usarlas. En el portal, el desplegable **«Espacio en disco»** las baja por adelantado o las
-suelta al terminar sin perder tus datos.
-"""
-
-README_DOCENTE = """# Banco virtual DEET · versión DOCENTE (privada)
-
-Igual que la versión del alumno (https://github.com/jeanaucapina/Practicas-Banco-Deet) **más** todo lo que el
-alumno no debe ver:
-
-- `docente/GUIA_SOLUCIONES.md`: cómo resolver y comprobar cada práctica.
-- Las soluciones: ejemplos-solución de `tablero/ejemplos_arduino/`, `docente/soluciones/`,
-  `tablero/practicas/<id>/solucion/` y el cableado de solución en cada `practica.json`.
-- El código del PLC de producción de L13–L15 (`tablero/practicas/_comun/*.ino`).
-- La clave del **modo docente** (solo su hash, `tablero/panel/clave_docente.sha256`).
-
-Instalar y usar: igual que el alumno (`.\\lab.ps1 navegador`). En el portal, botón **Modo docente**: ver y subir
-soluciones y **Cablear solución**. Para ver una práctica de OPC UA resuelta: `.\\lab.ps1 solucion L14`.
-Cambia la clave con `.\\lab.ps1 clave-docente`.
-
-**No compartas este repositorio con los alumnos.**
-"""
 
 GODOT_LEEME = """El proyecto Godot del tablero 3D no va en el paquete del alumno: el 3D web ya viene
 exportado en tablero/run/web. Esta carpeta existe solo porque docker-compose.yml la nombra
@@ -193,7 +138,9 @@ def main():
         compilar_plc(destino)
     (destino / "godot").mkdir(exist_ok=True)
     (destino / "godot" / "LEEME.txt").write_text(GODOT_LEEME, encoding="utf-8")
-    (destino / "README.md").write_text(README_DOCENTE if docente else README, encoding="utf-8")
+    catalogo = json.loads((RAIZ / "tablero" / "practicas" / "catalogo.json").read_text(encoding="utf-8"))
+    texto = readme_banco.readme_docente(catalogo) if docente else readme_banco.readme_alumno(catalogo)
+    (destino / "README.md").write_text(texto, encoding="utf-8")
     (destino / ".gitignore").write_text(GITIGNORE, encoding="utf-8")
     mb = sum(p.stat().st_size for p in destino.rglob("*") if p.is_file() and ".git" not in p.parts) / 1e6
     print("Paquete %s en %s: %d archivos del repo, %.0f MB%s" % ("DOCENTE" if docente else "ALUMNO", destino, n, mb,

@@ -7,7 +7,7 @@
 <style>
   :root {
     --fondo: #f3f4f1; --tarjeta: #fdfdfb; --borde: #dcdfd8; --texto: #1c2321; --suave: #5b6560;
-    --acento: #1f7f74; --acento-f: #d6efe9; --naranja: #c2571a; --naranja-f: #fbe6d4;
+    --acento: #1a6f65; --acento-f: #d6efe9; --naranja: #a64a14; --naranja-f: #fbe6d4;
     --rojo: #b3261e; --rojo-f: #f9dedc; --led-off: #c9cec8; --led-on: #f2b705; --verde: #2e9d4f;
     --azul: #2f62b0; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   }
@@ -45,15 +45,19 @@
   .etq { font-size: 12px; color: var(--suave); }
   .leds { display: flex; flex-wrap: wrap; gap: 3px; max-width: 330px; }
   .led { width: 22px; height: 22px; border-radius: 5px; background: var(--led-off); font: 9px/22px var(--mono);
-         text-align: center; color: var(--suave); }
+         text-align: center; color: var(--texto); }
   .led.on { background: var(--led-on); color: #3a2a00; box-shadow: 0 0 8px var(--led-on); }
   .led.in.on { background: var(--azul); color: #fff; box-shadow: none; }
   .matriz { display: grid; grid-template-columns: repeat(3, 26px); gap: 5px; padding: 6px; background: var(--fondo); border-radius: 8px; }
+  .matriz.vacia { display: block; padding: 6px 10px; }
+  .vacio-eq { color: var(--suave); font-size: 12.5px; font-style: italic; padding: 3px 0; }
   .matriz .led { width: 26px; height: 26px; border-radius: 50%; line-height: 26px; }
   button, select, input[type=file] { font: inherit; font-size: 13px; }
   button { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 8px;
            padding: 6px 11px; cursor: pointer; }
   button:hover { border-color: var(--acento); }
+  :focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+  .chip[title] { cursor: help; }
   button.prim { background: var(--acento); color: var(--tarjeta); border-color: var(--acento); font-weight: 600; }
   button.pulsado, button.activo { background: var(--azul); color: #fff; border-color: var(--azul); }
   button.peq { padding: 3px 8px; font-size: 12px; }
@@ -86,16 +90,17 @@
   dialog table { border-collapse: collapse; } dialog td, dialog th { border: 1px solid var(--borde); padding: 4px 8px; }
   .eventos { font: 12px/1.5 var(--mono); color: var(--suave); }
 </style>
+<link rel="stylesheet" href="/deet.css">
 </head>
 <body>
 <header>
   <h1>Laboratorio de Informática Industrial <span>· Tablero DEET</span></h1>
-  <span class="chip"><span class="punto" id="h-pasarela"></span>Pasarela</span>
-  <span class="chip"><span class="punto" id="h-gafas"></span><span id="h-gafas-t">Gafas</span></span>
-  <span class="chip"><span class="punto" id="h-equipos"></span><span id="h-equipos-t">Equipos</span></span>
-  <span class="chip"><span class="punto" id="h-broker"></span>Broker MQTT</span>
-  <span class="chip"><span class="punto" id="h-s7"></span>S7-1200</span>
-  <span class="chip"><span class="punto" id="h-openplc"></span><span id="h-openplc-t">OpenPLC</span></span>
+  <span class="chip" tabindex="0" title="Pasarela: el servicio que une gafas, paneles y equipos. Roja: el banco no está arrancado; ejecuta .\lab.ps1 arrancar."><span class="punto" id="h-pasarela"></span>Pasarela</span>
+  <span class="chip" tabindex="0" title="Gafas: visores Quest conectados a la pasarela. Gris: ninguno; ábrela en las gafas o, tras cambiar de red, ejecuta .\lab.ps1 gafas (USB)."><span class="punto" id="h-gafas"></span><span id="h-gafas-t">Gafas</span></span>
+  <span class="chip" tabindex="0" title="Equipos: los 2 Controllino y los 2 ESP32 PLC (contenedores). Rojo: ninguno corre; naranja: faltan algunos; ejecuta .\lab.ps1 arrancar."><span class="punto" id="h-equipos"></span><span id="h-equipos-t">Equipos</span></span>
+  <span class="chip" tabindex="0" title="Broker MQTT: el servidor por el que hablan el ESP32 y Node-RED (192.168.1.50:1883). Rojo: parado; .\lab.ps1 arrancar."><span class="punto" id="h-broker"></span>Broker MQTT</span>
+  <span class="chip" tabindex="0" title="S7-1200: PLC Siemens simulado con Snap7 (puerto 102). Rojo: no responde; .\lab.ps1 arrancar."><span class="punto" id="h-s7"></span>S7-1200</span>
+  <span class="chip" tabindex="0" title="OpenPLC: CPUs IEC 61131-3 (escalera/bloques) de cada tablero. Gris: paradas; actívalas en la tarjeta «Escalera y bloques» o con .\lab.ps1 openplc."><span class="punto" id="h-openplc"></span><span id="h-openplc-t">OpenPLC</span></span>
 </header>
 
 <main>
@@ -131,7 +136,7 @@
   <section class="tarjeta c8">
     <h2>Programar un equipo</h2>
     <div class="fila" style="align-items:center">
-      <select id="p-equipo">
+      <select id="p-equipo" aria-label="Equipo de destino">
         <option value="t1.controllino">Tablero 1 · Controllino (.ino)</option>
         <option value="t2.controllino">Tablero 2 · Controllino (.ino)</option>
         <option value="t1.esp32plc">Tablero 1 · ESP32 PLC (.ino)</option>
@@ -139,13 +144,13 @@
         <option value="t1.openplc">Tablero 1 · OpenPLC (.st)</option>
         <option value="t2.openplc">Tablero 2 · OpenPLC (.st)</option>
       </select>
-      <input type="file" id="p-archivo" accept=".ino,.st">
+      <input type="file" id="p-archivo" aria-label="Archivo .ino o .st" accept=".ino,.st">
       <button class="prim" id="p-subir">Compilar y subir</button>
       <button id="p-fabrica">Volver a fábrica</button>
     </div>
     <div class="fila" style="align-items:center;margin-top:10px">
       <strong style="font-size:14px">o un ejemplo</strong>
-      <select id="p-ejemplo"><option value="">— elige un ejemplo —</option></select>
+      <select id="p-ejemplo" aria-label="Ejemplo"><option value="">— elige un ejemplo —</option></select>
       <button class="prim" id="p-subir-ej">Subir el ejemplo a este equipo</button>
     </div>
     <div class="etq" id="p-ejemplo-info" style="margin-top:4px"></div>
@@ -192,7 +197,10 @@ async function orden(d) {
 }
 const entrada = (eq, i, v) => orden({t: "orden", equipo: eq, orden: {cmd: "entrada", i, v}});
 
+const SIN_DATOS = "sin datos — equipo apagado (.\\lab.ps1 arrancar)";
+const vacioEq = () => `<span class="vacio-eq">${SIN_DATOS}</span>`;
 function leds(arr, pref, clase = "") {
+  if (!arr || !arr.length) return vacioEq();
   return (arr || []).map((v, i) => `<span class="led ${clase} ${v ? "on" : ""}" title="${pref}${i}">${i}</span>`).join("");
 }
 
@@ -204,13 +212,13 @@ function montarTablero(n) {
     <div class="equipo">
       <h3>Controllino MEGA <span id="t${n}-c-modo"></span><span id="t${n}-c-red"></span></h3>
       <div class="fila">
-        <div class="grupo"><span class="etq">Matriz 3x3</span><div class="matriz" id="t${n}-c-mat"></div></div>
+        <div class="grupo"><span class="etq">Matriz 3x3</span><div class="matriz vacia" id="t${n}-c-mat">${vacioEq()}</div></div>
         <div class="grupo"><span class="etq">Pulsadores (mantén pulsado)</span>
           <div class="fila" style="gap:6px">
             ${[16, 17, 18].map(i => `<button class="peq" data-pulsa="${c}|${i}">I${i}</button>`).join("")}
           </div>
           <span class="etq" style="margin-top:6px">Potenciómetro A0: <b id="t${n}-c-a0v">0</b></span>
-          <input type="range" min="0" max="1023" value="0" data-pot="${c}">
+          <input type="range" min="0" max="1023" value="0" data-pot="${c}" aria-label="Potenciómetro A0 del tablero ${n}">
         </div>
         <div class="grupo"><span class="etq">Modo (como las teclas de la HMI)</span>
           <div class="fila" style="gap:6px">
@@ -219,14 +227,14 @@ function montarTablero(n) {
           </div>
         </div>
       </div>
-      <div class="grupo" style="margin-top:8px"><span class="etq">Salidas D0–D23</span><div class="leds" id="t${n}-c-do" style="max-width:none"></div></div>
+      <div class="grupo" style="margin-top:8px"><span class="etq">Salidas D0–D23</span><div class="leds" id="t${n}-c-do" style="max-width:none">${vacioEq()}</div></div>
     </div>
     <div class="equipo">
       <h3>ESP32 PLC 14 <span id="t${n}-e-prog"></span><span id="t${n}-e-red"></span></h3>
       <div class="fila">
-        <div class="grupo"><span class="etq">Salidas Q0.0–Q0.3 · relé</span><div class="leds" id="t${n}-e-do"></div></div>
+        <div class="grupo"><span class="etq">Salidas Q0.0–Q0.3 · relé</span><div class="leds" id="t${n}-e-do">${vacioEq()}</div></div>
         <div class="grupo"><span class="etq">Entradas I0.1–I0.8 (clic = cambiar)</span>
-          <div class="fila" style="gap:4px" id="t${n}-e-di"></div></div>
+          <div class="fila" style="gap:4px" id="t${n}-e-di">${vacioEq()}</div></div>
         <div class="grupo"><span class="etq">WiFi</span><button class="peq" data-wifi="${e}" id="t${n}-e-wifi">—</button></div>
       </div>
     </div>`;
@@ -240,7 +248,8 @@ function pintarTablero(n, eq) {
     : `<span class="pill">fábrica · ${MODOS[c.modo] ?? "?"}</span>`);
   poner(`t${n}-c-red`, c.lan ? `<span class="pill">LAN ${c.ip}</span>` : `<span class="pill gris">sin cable de red</span>`);
   const d = c.do || [];
-  poner(`t${n}-c-mat`, MATRIZ.flat().map(i => `<span class="led ${d[i] ? "on" : ""}">D${i}</span>`).join(""));
+  $(`t${n}-c-mat`).classList.toggle("vacia", !d.length);
+  poner(`t${n}-c-mat`, d.length ? MATRIZ.flat().map(i => `<span class="led ${d[i] ? "on" : ""}">D${i}</span>`).join("") : vacioEq());
   poner(`t${n}-c-do`, leds(d, "D"));
   const di = c.di || [];
   document.querySelectorAll(`[data-pulsa^="t${n}.controllino|"]`).forEach(b => {
@@ -258,8 +267,8 @@ function pintarTablero(n, eq) {
   poner(`t${n}-e-red`, (e.lan ? `<span class="pill">LAN</span>` : "") +
     (e.wifi ? `<span class="pill">WiFi</span>` : "") + (e.broker ? `<span class="pill">MQTT ${e.broker}</span>` : ""));
   poner(`t${n}-e-do`, leds([...(e.do || []), ...(e.rele || [])], "Q").replace(/>4</, ">R<"));
-  poner(`t${n}-e-di`, (e.di || []).map((v, i) =>
-    `<button class="peq ${v ? "pulsado" : ""}" data-esp="t${n}.esp32plc|${i}|${v ? 0 : 1}">I0.${i + 1}</button>`).join(""));
+  poner(`t${n}-e-di`, (e.di || []).length ? e.di.map((v, i) =>
+    `<button class="peq ${v ? "pulsado" : ""}" data-esp="t${n}.esp32plc|${i}|${v ? 0 : 1}">I0.${i + 1}</button>`).join("") : vacioEq());
   const w = $(`t${n}-e-wifi`);
   w.textContent = e.wifi ? "Apagar WiFi" : "Encender WiFi";
   w.dataset.v = e.wifi ? "0" : "1";
@@ -373,7 +382,7 @@ function pintarOpenplc(cont, proys, auto, info) {
       `<span class="${r.ok ? "" : "mal"}">${r.equipo.slice(0, 2).toUpperCase()} ${r.ok ? "cargado ✓" : "ERROR"}</span>`).join(" · ")) : "";
   const autoHtml = `<div class="fila" style="align-items:center;margin-top:10px;padding:8px 10px;background:var(--fondo);border-radius:8px">
       <strong style="font-size:14px">Al pulsar la flecha naranja del editor, cargar en:</strong>
-      <select id="auto-sel">${opt("", "ninguna (yo elijo)")}${opt("t1", "Controllino 1")}${opt("t2", "Controllino 2")}${opt("ambas", "los dos")}</select>
+      <select id="auto-sel" aria-label="Dónde cargar el programa generado">${opt("", "ninguna (yo elijo)")}${opt("t1", "Controllino 1")}${opt("t2", "Controllino 2")}${opt("ambas", "los dos")}</select>
       <span class="etq">${resultado}</span></div>`;
   const lista = (proys || []).length ? `<table class="tabla" style="margin-top:10px">
       <thead><tr><th>programa generado</th><th>cuándo</th><th></th></tr></thead><tbody>
@@ -405,6 +414,7 @@ async function refrescar() {
     const op = ["tab1-openplc", "tab2-openplc"].filter(n => cont[n]?.estado === "running").length;
     $("h-openplc").className = "punto " + (op ? "ok" : "");
     $("h-openplc-t").textContent = op ? `OpenPLC (${op})` : "OpenPLC parado";
+    if (!p) { pintarTablero(1, {}); pintarTablero(2, {}); }
     if (p) {
       pintarTablero(1, p.equipos || {});
       pintarTablero(2, p.equipos || {});
@@ -413,7 +423,7 @@ async function refrescar() {
         while (capturas.size > 400) capturas.delete(capturas.keys().next().value);
         pintarCaptura();
       }
-      $("eventos").innerHTML = (p.eventos || []).slice().reverse().map(esc).join("<br>");
+      $("eventos").innerHTML = (p.eventos || []).slice().reverse().map(esc).join("<br>") || "sin eventos todavía";
     }
     pintarEjemplos(r.ejemplos);
     pintarS7(r.s7);
@@ -421,6 +431,7 @@ async function refrescar() {
     pintarOpenplc(cont, r.proyectos, r.auto, r.auto_info);
   } catch (e) {
     $("h-pasarela").className = "punto mal";
+    pintarTablero(1, {}); pintarTablero(2, {});
   }
 }
 

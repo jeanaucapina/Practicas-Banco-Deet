@@ -36,7 +36,6 @@ pulsador y, para refrescar, una vez por segundo.
 """
 
 import asyncio
-import os
 import struct
 import time
 
@@ -141,8 +140,8 @@ class Controllino(Equipo):
             await w.drain()
             cab = await asyncio.wait_for(r.readexactly(7), 0.8)
             return await asyncio.wait_for(r.readexactly(struct.unpack(">H", cab[4:6])[0] - 1), 0.8)
-        except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError):
-            return None
+        except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError, struct.error):
+            return None             # ValueError: MBAP con longitud 0 de un servidor ajeno
         finally:
             w.close()
 
@@ -158,7 +157,7 @@ class Controllino(Equipo):
             bits = self._bits_remotos()
             if bits == antes and time.time() - t_ultimo < 1.0:
                 continue
-            esclavo = h[3] or 1
+            esclavo = (h[3] or 1) & 0xFF      # HR3 lo escribe cualquier maestro: >255 no cabe en el byte de unidad
             pdu = self._pdu_fc15(bits)
             if modo == 3:
                 r = await self.preguntar_485(esclavo, pdu) if self.bus["en_bus"] else None
@@ -196,8 +195,8 @@ class Controllino(Equipo):
 
     async def iniciar(self):
         await servidor_tcp(self.mapa, TABLERO, 502, self.peticiones)
-        asyncio.ensure_future(self._programa())
-        asyncio.ensure_future(self._bucle_maestro())
+        self.lanzar(self._programa)
+        self.lanzar(self._bucle_maestro)
 
     def estado(self):
         m = self.mapa

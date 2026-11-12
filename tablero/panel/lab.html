@@ -7,7 +7,7 @@
 <style>
   :root {
     --fondo: #f3f4f1; --tarjeta: #fdfdfb; --borde: #dcdfd8; --texto: #1c2321; --suave: #5b6560;
-    --acento: #1f7f74; --acento-f: #d6efe9; --naranja: #c2571a; --naranja-f: #fbe6d4;
+    --acento: #1a6f65; --acento-f: #d6efe9; --naranja: #a64a14; --naranja-f: #fbe6d4;
     --rojo: #b3261e; --rojo-f: #f9dedc; --led-off: #c9cec8; --led-on: #f2b705; --verde: #2e9d4f;
     --azul: #2f62b0; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   }
@@ -29,16 +29,30 @@
   header a { color: var(--acento); font-size: 13px; text-decoration: none; }
   .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--suave); }
   .punto { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); flex: none; }
-  .punto.ok { background: var(--verde); } .punto.mal { background: var(--rojo); }
+  .punto.ok { background: var(--verde); } .punto.mal { background: var(--rojo); } .punto.medio { background: var(--naranja); }
+  :focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+  .visor :focus-visible, .guia :focus-visible { outline-color: #8ab4ff; }
+  .chip[title] { cursor: help; }
   .espacio { flex: 1; }
   main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 12px; padding: 12px 16px 16px; }
   @media (max-width: 1000px) { main { grid-template-columns: 1fr; grid-auto-rows: minmax(420px, auto); overflow: auto; } }
   .visor { position: relative; background: #0b0f14; border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; min-height: 380px; }
   .visor iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-  .ayuda3d { position: absolute; right: 10px; bottom: 10px; z-index: 2; font-size: 12px; color: #cfd8e3; background: rgba(8,12,18,.65);
-             padding: 4px 9px; border-radius: 6px; pointer-events: none; }
-  .vistas { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; z-index: 2; }
-  .guia { display: none; position: absolute; left: 10px; top: 10px; bottom: 50px; width: min(430px, 55%); z-index: 2; overflow: auto;
+  .abajo3d { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-direction: column;
+             align-items: flex-start; gap: 6px; pointer-events: none; }
+  .ayuda3d { font-size: 12px; color: #dde5ee; background: rgba(8,12,18,.72); padding: 4px 9px; border-radius: 6px; max-width: 100%; }
+  .vistas { display: flex; flex-wrap: wrap; gap: 6px; pointer-events: auto; }
+  .vistas .q { display: none; }
+  @media (max-width: 700px) {
+    .ayuda3d { display: none; } .ayuda3d.abierta { display: block; }
+    .vistas .q { display: inline-block; }
+  }
+  .aviso3d { display: none; position: absolute; inset: 0; z-index: 1; align-items: center; justify-content: center; text-align: center;
+             padding: 20px 20px 90px; color: #e6edf5; background: #0b0f14; flex-direction: column; gap: 8px; }
+  .aviso3d.visible { display: flex; }
+  .aviso3d b { font-size: 16px; } .aviso3d code { font: 13px var(--mono); background: #1c2430; padding: 2px 7px; border-radius: 5px; color: #f2f5f8; overflow-wrap: anywhere; }
+  .aviso3d small { color: #aab6c4; font-size: 12.5px; max-width: 460px; }
+  .guia { display: none; position: absolute; left: 10px; top: 10px; bottom: 100px; width: min(430px, 55%); z-index: 2; overflow: auto;
           background: rgba(11,15,20,.93); color: #e6edf5; border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; }
   .guia.abierta { display: block; }
   .guia h3 { margin: 0 0 6px; font-size: 14px; } .guia .pasos { margin: 4px 0; } .guia .pasos li { border-color: #2a3544; }
@@ -83,6 +97,21 @@
   .oculto { display: none !important; }
   .docente-sol { margin-top: 10px; padding: 8px 10px; border: 1px dashed var(--naranja); border-radius: 8px;
                  background: var(--naranja-f); font-size: 13px; }
+  .lora-doc code { overflow-wrap: anywhere; word-break: break-all; }
+  .lora-doc .fila { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; align-items: center; }
+  .lora-doc .fila button, .lora-doc .fila a.boton { width: auto; padding: 7px 10px; font-size: 13px; }
+  .lora-doc .deslizador { display: grid; grid-template-columns: 34px 1fr 118px; gap: 8px; align-items: center; margin: 4px 0; }
+  .lora-doc .deslizador input { width: 100%; min-width: 0; }
+  .lora-doc .deslizador span { font: 12px var(--mono); }
+  .lora-doc ul.pasos li small { color: var(--suave); display: block; font-size: 12px; overflow-wrap: anywhere; }
+  .cadena { list-style: none; padding: 0; margin: 6px 0; font-size: 13px; }
+  .cadena li { display: grid; grid-template-columns: 14px 1fr; gap: 4px 8px; padding: 4px 0; border-bottom: 1px solid var(--borde); }
+  .cadena .punto { margin-top: 5px; } .cadena li.rompe { background: var(--rojo-f); border-radius: 6px; padding-left: 4px; }
+  .cadena small { grid-column: 2; color: var(--suave); font-size: 12px; overflow-wrap: anywhere; }
+  .tabla-ul { overflow-x: auto; max-width: 100%; }
+  .tabla-ul table { border-collapse: collapse; font: 12px var(--mono); width: 100%; }
+  .tabla-ul th, .tabla-ul td { border: 1px solid var(--borde); padding: 2px 6px; white-space: nowrap; text-align: right; }
+  .tabla-ul th { background: var(--fondo); }
   .md h3 { font-size: 15px; margin: 8px 0 4px; } .md h4 { font-size: 13.5px; margin: 8px 0 3px; color: var(--suave); }
   .md p, .md ul { margin: 4px 0; font-size: 13.5px; } .md ul { padding-left: 20px; }
   .md table { border-collapse: collapse; font-size: 13px; margin: 4px 0; } .md td, .md th { border: 1px solid var(--borde); padding: 2px 8px; }
@@ -102,13 +131,14 @@
   a.boton small { display: block; font-weight: 400; opacity: .85; font-size: 12px; margin-top: 1px; }
   select { font: inherit; font-size: 13px; background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 8px; padding: 6px; }
 </style>
+<link rel="stylesheet" href="/deet.css">
 </head>
 <body>
 <header>
   <h1>Laboratorio DEET <span>· Informática Industrial</span></h1>
-  <span class="chip"><span class="punto" id="p-pasarela"></span><span id="t-pasarela">pasarela</span></span>
-  <span class="chip"><span class="punto" id="p-equipos"></span><span id="t-equipos">equipos</span></span>
-  <span class="chip"><span class="punto" id="p-3d"></span><span>tablero 3D</span></span>
+  <span class="chip" id="c-pasarela" tabindex="0" title="Pasarela: el servicio que une el tablero 3D con los equipos. Si está roja, arranca el banco con .\lab.ps1 arrancar."><span class="punto" id="p-pasarela"></span><span id="t-pasarela">pasarela</span></span>
+  <span class="chip" id="c-equipos" tabindex="0" title="Equipos: contenedores de los 2 Controllino y los 2 ESP32 PLC en marcha. Si no están todos, .\lab.ps1 arrancar."><span class="punto" id="p-equipos"></span><span id="t-equipos">equipos</span></span>
+  <span class="chip" id="c-3d" tabindex="0" title="Tablero 3D: el servidor web de la escena (puerto 8091). Si está rojo, exporta y sirve con .\lab.ps1 web."><span class="punto" id="p-3d"></span><span id="t-3d">tablero 3D</span></span>
   <span class="espacio"></span>
   <button id="b-docente" class="oculto" onclick="docente()" title="Ver y subir las soluciones de las prácticas">Modo docente</button>
   <a href="/">Panel técnico</a>
@@ -117,13 +147,21 @@
 <main>
   <section class="visor" id="visor">
     <iframe id="f3d" title="Tablero 3D" allow="fullscreen"></iframe>
-    <div class="vistas">
-      <button onclick="vista('')">Vista general</button>
-      <button onclick="vista('t1')">Tablero 1</button>
-      <button onclick="vista('t2')">Tablero 2</button>
-      <button onclick="guia()" title="Mostrar/ocultar los pasos (F1)">Pasos (F1)</button>
+    <div class="aviso3d" id="aviso3d" role="status">
+      <b id="aviso3d-t">El tablero 3D no está exportado</b>
+      <span>Ejecuta <code>.\lab.ps1 web</code> (o <code>.\lab.ps1 navegador</code>) en el PC del banco.</span>
+      <small id="aviso3d-s">Sirve en el puerto 8091 (<code>tablero/run/web</code>). En Linux: exporta el preset «Web Tablero» a <code>tablero/run/web</code> y ejecuta <code>docker compose --profile pasarela up -d web</code>. Esta página lo reintenta sola.</small>
     </div>
-    <div class="ayuda3d">W A S D moverte · Q E bajar/subir · clic derecho girar (con un cable cogido, lo suelta) · rueda zoom · 1 2 0 vistas · F1 pasos</div>
+    <div class="abajo3d">
+      <div class="ayuda3d" id="ayuda3d">W A S D moverte · Q E bajar/subir · clic derecho girar (con un cable cogido, lo suelta) · rueda zoom · 1 2 0 vistas · F1 pasos</div>
+      <div class="vistas">
+        <button onclick="vista('')">Vista general</button>
+        <button onclick="vista('t1')">Tablero 1</button>
+        <button onclick="vista('t2')">Tablero 2</button>
+        <button onclick="guia()" title="Mostrar/ocultar los pasos (F1)">Pasos (F1)</button>
+        <button class="q" onclick="$('ayuda3d').classList.toggle('abierta')" aria-label="Mostrar los controles del teclado y ratón" title="Controles">?</button>
+      </div>
+    </div>
     <div class="guia" id="guia"></div>
     <div class="editor" id="editor">
       <div class="barra">
@@ -137,7 +175,7 @@
   <aside class="cajon">
     <div class="tarjeta" id="t-practica">
       <h2>Práctica</h2>
-      <select id="prac" style="width:100%" onchange="elegirPractica(this.value)"></select>
+      <select id="prac" aria-label="Práctica" style="width:100%" onchange="elegirPractica(this.value)"></select>
       <div id="prac-info" style="margin-top:8px"></div>
     </div>
 
@@ -163,14 +201,14 @@
       <div class="quien" id="eq-quien"></div>
       <div id="eq-wifi" class="oculto" style="margin-bottom:8px">
         <button onclick="alternarWifi()" id="b-wifi">WiFi</button>
-        <select id="posicion" onchange="posicionRadio(this.value)" title="Dónde está el banco respecto al punto de acceso (cambia el RSSI)">
+        <select id="posicion" aria-label="Posición del banco respecto al punto de acceso" onchange="posicionRadio(this.value)" title="Dónde está el banco respecto al punto de acceso (cambia el RSSI)">
           <option value="-48">Posición A · línea de vista al AP</option>
           <option value="-73">Posición B · tras una pared</option>
         </select>
         <span class="etq" id="wifi-ip"></span>
       </div>
       <div id="eq-lora" class="oculto" style="margin-bottom:8px">
-        <select id="posicion-lora" onchange="posicionLora(this.value)" title="Dónde está el nodo LoRa en el edificio (guía L10, Parte IV)">
+        <select id="posicion-lora" aria-label="Posición del nodo LoRa" onchange="posicionLora(this.value)" title="Dónde está el nodo LoRa en el edificio (guía L10, Parte IV)">
           <option value="P1">LoRa en P1 · laboratorio, línea de vista (≈5 m)</option>
           <option value="P2">LoRa en P2 · otro piso, dos losas (≈40 m)</option>
           <option value="P3">LoRa en P3 · exterior, sin línea de vista (≈300 m)</option>
@@ -189,7 +227,7 @@
           <small>Abre el editor gráfico (como KOP/FUP de TIA). Al terminar, se carga solo.</small></button>
         <button class="grande" onclick="document.getElementById('archivo').click()">Subir un programa .ino
           <small>Elige el archivo de tu equipo (Arduino IDE / VS Code).</small></button>
-        <input type="file" id="archivo" accept=".ino" class="oculto">
+        <input type="file" id="archivo" aria-label="Archivo .ino" accept=".ino" class="oculto">
       </div>
       <div class="zona" id="zona">…o suelta aquí tu <b>.ino</b></div>
       <div id="resultado"></div>
@@ -206,7 +244,7 @@
     <div class="tarjeta">
       <h2>4 · Analizar el tráfico</h2>
       <div class="etq" style="margin-bottom:6px">Red a observar</div>
-      <select id="red" style="width:100%;margin-bottom:8px">
+      <select id="red" aria-label="Red a capturar" style="width:100%;margin-bottom:8px">
         <option value="tab-lan">LAN 192.168.1.0/24 (Ethernet y WiFi: Modbus TCP, MQTT, S7, PROFINET)</option>
         <option value="tab-485">Bus RS-485</option>
       </select>
@@ -257,8 +295,34 @@ let ultimo = null;
 let serieTxt = "";
 let enEditor = false;
 
-$("f3d").src = "http://" + host + ":8091/";
-$("f3d").addEventListener("load", () => $("p-3d").className = "punto ok");
+// El tablero 3D lo sirve otro contenedor (8091). Se sondea antes de cargarlo: un iframe que no conecta
+// también dispara «load» (página de error del navegador) y el área quedaba negra con el punto verde.
+const URL3D = "http://" + host + ":8091/";
+let listo3d = false, cargando3d = false, temporizador3d = null;
+function estado3d(cls, texto, aviso, titulo) {
+  $("p-3d").className = "punto " + cls;
+  $("t-3d").textContent = texto;
+  $("aviso3d").classList.toggle("visible", !!aviso);
+  if (aviso) $("aviso3d-t").textContent = titulo || "El tablero 3D no está exportado";
+}
+async function sondear3d() {
+  if (listo3d) return;
+  try {
+    const c = new AbortController(); const t = setTimeout(() => c.abort(), 4000);
+    await fetch(URL3D, {mode: "no-cors", cache: "no-store", signal: c.signal}); clearTimeout(t);
+  } catch (_) {
+    if (cargando3d) { $("f3d").removeAttribute("src"); cargando3d = false; }
+    estado3d("mal", "tablero 3D no disponible", true);
+    return;
+  }
+  if (!cargando3d) {
+    cargando3d = true; $("f3d").src = URL3D;
+    estado3d("medio", "tablero 3D cargando…", false);
+    temporizador3d = setTimeout(() => { if (!listo3d) estado3d("mal", "tablero 3D sin respuesta", true, "El tablero 3D no responde"); }, 60000);
+  }
+}
+$("f3d").addEventListener("load", () => { if (cargando3d && !listo3d) $("p-3d").className = "punto medio"; });
+sondear3d(); setInterval(sondear3d, 5000);
 
 // ── Selección de equipo ─────────────────────────────────────────────────
 function pintarSel() {
@@ -281,6 +345,7 @@ window.addEventListener("message", ev => {
   const d = ev.data;
   if (d && d.t === "guia") guia();
   if (d && d.t === "equipo" && EQUIPOS.some(e => e.id === d.id)) elegir(d.id);
+  if (d && d.t === "listo") { listo3d = true; clearTimeout(temporizador3d); estado3d("ok", "tablero 3D", false); }
   if (d && d.t === "listo" && practica) $("f3d").contentWindow.postMessage({t: "marcar", ids: practica.marcar || [], guia: practica.guia || []}, "*");
   if (d && d.t === "listo") {      // los hilos de los modulos son solo del 3D: se reponen tras recargar la pagina
     try {
@@ -515,7 +580,7 @@ async function cargarPracticas() {
 }
 async function elegirPractica(id) {
   try { localStorage.setItem("practica", id); } catch (_) {}
-  clearInterval(sondaVerif);
+  clearInterval(sondaVerif); clearInterval(sondaLora); sondaLora = null;
   const mi = ++tokenPrac;                 // si llega una respuesta vieja, se descarta
   const c = catalogo.find(p => p.id === id); if (!c) return;
   let html = '<div class="nota">' + esc(c.fecha) + " · " + esc(c.entregable) +
@@ -549,11 +614,96 @@ async function elegirPractica(id) {
   if (sol.length) html += '<div class="docente-sol"><b>Solución (docente)</b>: ' +
     sol.map(s => "<code>" + esc(s[1]) + "</code> → " + esc(s[0])).join(", ") +
     ' <button onclick="subirSolucion()">Subir solución</button><div class="etq" id="sol-res"></div></div>';
+  if (practica.demo_lora) html += bloqueLora();
   $("prac-info").innerHTML = html;
+  iniciarLora();
   pintarPasos(practica.pasos.map(t => ({txt: t, ok: null, motivo: ""})), -1);
   if (practica.equipo && sel !== practica.equipo) elegir(practica.equipo);
   $("f3d").contentWindow.postMessage({t: "marcar", ids: practica.marcar || [], guia: practica.guia || []}, "*");
   espacio(false);
+}
+// ── L10 (docente): MONTAR SOLUCIÓN COMPLETA, sliders de A0/A1 y «Así debe salir» ──────────
+let sondaLora = null, loraUltimo = null, loraModulosEnviados = "";
+function bloqueLora() {
+  return '<div class="docente-sol lora-doc" id="lora-doc"><b>L10 · solución completa (docente)</b>' +
+    '<div class="nota">Prepara, atornilla la antena, cablea la solución, programa el Controllino y el ESP32 (un envío cada 20 s), ' +
+    'levanta ChirpStack, da de alta el nodo, carga el flujo de Node-RED y espera el primer ascendente.</div>' +
+    '<div class="fila"><button class="prim" id="b-lora-montar" onclick="montarLora(\'\')">MONTAR SOLUCIÓN COMPLETA (L10)</button></div>' +
+    '<div id="lora-plan" class="nota"></div><ul class="pasos" id="lora-pasos"></ul><div id="lora-error"></div><div class="nota" id="lora-fin"></div>' +
+    '<b>Potenciómetros (en vivo)</b>' +
+    '<div class="deslizador"><label for="s-a0">A0</label><input type="range" id="s-a0" min="0" max="1023" value="600" oninput="potLora(0, this.value)" aria-label="A0 temperatura"><span id="v-a0"></span></div>' +
+    '<div class="deslizador"><label for="s-a1">A1</label><input type="range" id="s-a1" min="0" max="1023" value="300" oninput="potLora(1, this.value)" aria-label="A1 nivel"><span id="v-a1"></span></div>' +
+    '<div class="fila"><a class="boton" id="l-cs" target="_blank" rel="noopener" href="#">Abrir ChirpStack</a>' +
+    '<a class="boton" id="l-nr" target="_blank" rel="noopener" href="#">Abrir Node-RED</a>' +
+    '<a class="boton" id="l-cap" href="/api/captura?red=tab-lan&seg=60" download>Abrir captura</a></div>' +
+    '<b>Así debe salir</b><div class="nota" id="lora-esperado"></div><ul class="cadena" id="lora-cadena"></ul>' +
+    '<div class="tabla-ul"><table id="lora-ups"></table></div></div>';
+}
+function iniciarLora() {
+  if (!practica || !practica.demo_lora) return;
+  refrescarLora(); sondaLora = setInterval(refrescarLora, 2500);
+}
+async function refrescarLora() {
+  let r;
+  try { r = await fetch("/api/lora_demo"); } catch (_) { return; }
+  if (!r.ok || !$("lora-doc")) return;
+  const d = await r.json(); loraUltimo = d;
+  const dm = d.demo, host_ = host;
+  $("b-lora-montar").disabled = dm.corriendo;
+  const glifo = {ok: "✔", error: "✘", ahora: "…", pend: "·"};
+  $("lora-pasos").innerHTML = (dm.pasos || []).map(p => '<li class="' + ({ok: "ok", error: "no", ahora: "ahora"}[p.estado] || "") + '">' + esc(p.nombre) +
+    (p.estado === "ahora" ? " …" : p.seg ? " · " + p.seg + " s" : "") + (p.detalle ? "<small>" + esc(p.detalle) + "</small>" : "") + "</li>").join("");
+  $("lora-error").innerHTML = dm.error ? '<div class="error"><b>' + esc(dm.error.nombre) + "</b>: " + esc(dm.error.msg) +
+    '<div class="fila"><button onclick="montarLora(\'' + dm.error.paso + '\')">Reintentar desde aquí</button></div></div>' : "";
+  $("lora-fin").textContent = dm.resumen || "";
+  const pl = d.plan;
+  $("lora-plan").innerHTML = !pl || dm.corriendo ? "" : !pl.docker ? '<span class="error">' + esc(pl.motivo) + "</span>" :
+    pl.faltan.length ? "Falta bajar de Docker Hub: " + pl.faltan.map(f => esc(f.nombre) + " (~" + gb(f.aprox) + ")").join(", ") + " · ≈ " + gb(pl.faltan_aprox_bytes) :
+    "Imágenes de ChirpStack ya en este PC.";
+  const mj = JSON.stringify(dm.modulos || []);
+  if ((dm.modulos || []).length && loraModulosEnviados !== mj) {          // los hilos de los módulos son solo del 3D
+    loraModulosEnviados = mj;
+    $("f3d").contentWindow.postMessage({t: "cablear_modulos", pares: dm.modulos}, "*");
+    try { localStorage.setItem("cab_modulos", JSON.stringify({id: "L10", pares: dm.modulos})); } catch (_) {}
+  }
+  const e = d.esperado, dentro = document.activeElement;
+  [["a0", 0, e.a0, e.temperatura, "°C"], ["a1", 1, e.a1, e.nivel, "%"]].forEach(([k, i, v, x, u]) => {
+    if (dentro !== $("s-" + k)) $("s-" + k).value = v;
+    $("v-" + k).textContent = v + " → " + x.toFixed(1) + " " + u;
+  });
+  $("lora-esperado").innerHTML = "Con A0=" + e.a0 + " y A1=" + e.a1 + " el próximo ascendente trae <b>temperatura " + e.temperatura.toFixed(1) + "</b>, <b>nivel " + e.nivel.toFixed(1) +
+    "</b>, alarma_temp=" + e.alarma_temp + ", alarma_nivel=" + e.alarma_nivel + " (cada " + e.periodo_ms / 1000 + " s). DevEUI <code>" + e.deveui + "</code> · JoinEUI <code>" + e.joineui +
+    "</code> · canales " + e.canales + " · trama de " + e.bytes + " B · tema <code>" + esc(e.tema) + "</code>.";
+  const rompe = d.cadena.findIndex(c => c.estado !== "ok");
+  $("lora-cadena").innerHTML = d.cadena.map((c, i) => '<li class="' + (i === rompe ? "rompe" : "") + '"><span class="punto ' + ({ok: "ok", fallo: "mal", espera: "medio"}[c.estado]) + '"></span><span><b>' +
+    esc(c.nombre) + "</b>" + (i === rompe ? " ← aquí se rompe" : "") + "</span><small>" + esc(c.detalle) + "</small></li>").join("");
+  $("lora-ups").innerHTML = "<tr><th>hora</th><th>fCnt</th><th>MHz (can.)</th><th>SF/DR</th><th>RSSI</th><th>SNR</th><th>temp</th><th>nivel</th><th>alarma</th></tr>" +
+    (d.uplinks.length ? d.uplinks.map(u => "<tr><td>" + u.hora + "</td><td>" + u.fcnt + (u.confirmado ? "c" : "") + "</td><td>" + (u.frec_mhz || "-") + " (" + (u.canal ?? "-") + ")</td><td>SF" + (u.sf || "-") + "/DR" + (u.dr ?? "-") +
+      "</td><td>" + (u.rssi ?? "-") + "</td><td>" + (u.snr ?? "-") + "</td><td>" + (u.temperatura ?? "-") + "</td><td>" + (u.nivel ?? "-") + "</td><td>" + (u.decodificado ? (u.alarma_temp ? "T" : "") + (u.alarma_nivel ? "N" : "") || "no" : "sin decodificar") + "</td></tr>").join("")
+      : '<tr><td colspan="9" style="text-align:center">Sin ascendentes todavía</td></tr>');
+  const base = "http://" + host_ + ":8089";
+  $("l-cs").href = d.enlaces.dispositivo ? d.enlaces.dispositivo.replace("{host}", host_) : base + "/";
+  $("l-cs").title = d.enlaces.dispositivo ? "Directo al dispositivo banco-t1 (admin / admin)" : "ChirpStack (admin / admin); el enlace directo aparece al dar de alta el nodo";
+  $("l-nr").href = d.enlaces.nodered ? d.enlaces.nodered.replace("{host}", host_) : "http://" + host_ + ":1890/";
+  $("l-nr").title = d.enlaces.nodered_quien || "Node-RED";
+}
+let potTemporizador = null;
+function potLora(i, v) {
+  $("v-a" + i).textContent = v;
+  clearTimeout(potTemporizador);
+  potTemporizador = setTimeout(() => fetch("/api/montar", {method: "POST", body: JSON.stringify(
+    {ordenes: [["t1.controllino", {cmd: "analogica", i, v: +v}]]})}), 80);
+}
+async function montarLora(desde) {
+  if (!desde) {
+    const r = await (await fetch("/api/lora_demo")).json(), pl = r.plan;
+    if (pl && !pl.docker) { alert(pl.motivo); return; }
+    if (pl && pl.faltan.length && !confirm("Antes de empezar hay que bajar de Docker Hub:\n\n" + pl.faltan.map(f => "  " + f.nombre + " (~" + gb(f.aprox) + ")").join("\n") +
+      "\n\nTotal ≈ " + gb(pl.faltan_aprox_bytes) + ". Las que ya tienes no se vuelven a bajar. ¿Seguir?")) return;
+  }
+  const r = await fetch("/api/lora_demo" + (desde ? "?desde=" + desde : ""), {method: "POST"});
+  if (!r.ok) { const d = await r.json(); alert(d.salida || "No se pudo empezar"); return; }
+  refrescarLora();
 }
 // Imágenes extra por práctica: se bajan al necesitarlas y se pueden soltar al terminar.
 let espacioDatos = {}, sondaEspacio = null;

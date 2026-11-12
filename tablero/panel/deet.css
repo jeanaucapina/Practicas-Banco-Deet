@@ -1,0 +1,82 @@
+/* Linea grafica DEET (Universidad de Cuenca) para el portal y la documentacion del banco.
+   Fuente: Pag-Web-Deet / codigo/theme/deet-ucuenca/assets/css/deet.css.
+
+   Se carga DESPUES del <style> de cada pagina y solo redefine las variables de color y el
+   aspecto (esquinas rectas, cabecera azul marino, rotulos en mayusculas). No toca ids, clases
+   ni scripts. Si este archivo no carga (p. ej. la pagina abierta por file://), la pagina se ve
+   con su estilo anterior y sigue funcionando.
+
+   Tipografia: FF Meta Pro (comercial, no se incluye en el repo) y, si el equipo no la tiene,
+   Fira Sans / Segoe UI. Modo oscuro: derivado del azul marino, igual que en el resto del banco.
+   Compatible con los dos selectores de tema que ya existen: data-tema (docs) y data-theme (lora). */
+
+:root {
+  --deet-navy: #002856; --deet-navy-deep: #001a3a; --deet-blue: #0a56ae; --deet-gray: #6f6f6f;
+  --deet-sky: #b6cce7; --deet-paper: #f6f6f4;
+  --deet-font: "FF Meta Pro", "Meta Pro", "Fira Sans", "Segoe UI", system-ui, Arial, sans-serif;
+  --deet-ease: cubic-bezier(.16, 1, .3, 1);
+  --deet-cab: #002856;
+
+  --fondo: #f6f6f4; --tarjeta: #ffffff; --borde: #d9dde3; --texto: #14202e; --suave: #5b6675;
+  --acento: #002856; --acento-f: #e3ebf5;
+  --azul: #0a56ae; --azul-fondo: #e6eef9;
+  --naranja: #a64a14; --naranja-f: #fbe6d4; --naranja-fondo: #fbe6d4;
+  --rojo: #b3261e; --rojo-f: #f9dedc; --rojo-fondo: #f9dedc;
+  --verde: #1f7a43; --verde-fondo: #e4f4ea;
+  --led-off: #c9cec8; --led-on: #f2b705;
+  --codigo: #eef0f4; --sombra: 0 1px 2px rgba(0, 0, 0, .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]):not([data-theme="light"]) {
+    --deet-cab: #00122e;
+    --fondo: #001a3a; --tarjeta: #002856; --borde: #1b4175; --texto: #e8eef6; --suave: #a3b8d4;
+    --acento: #b6cce7; --acento-f: #12396b;
+    --azul: #6fa5e8; --azul-fondo: #0e2f5a;
+    --naranja: #f0a64f; --naranja-f: #3a2a14; --naranja-fondo: #3a2a14;
+    --rojo: #ff8a80; --rojo-f: #3b1a18; --rojo-fondo: #3b1a18;
+    --verde: #5fd08e; --verde-fondo: #14301f;
+    --led-off: #274a78; --led-on: #ffd43b;
+    --codigo: #00204a; --sombra: none;
+  }
+}
+:root[data-tema="oscuro"], :root[data-theme="dark"] {
+  --deet-cab: #00122e;
+  --fondo: #001a3a; --tarjeta: #002856; --borde: #1b4175; --texto: #e8eef6; --suave: #a3b8d4;
+  --acento: #b6cce7; --acento-f: #12396b;
+  --azul: #6fa5e8; --azul-fondo: #0e2f5a;
+  --naranja: #f0a64f; --naranja-f: #3a2a14; --naranja-fondo: #3a2a14;
+  --rojo: #ff8a80; --rojo-f: #3b1a18; --rojo-fondo: #3b1a18;
+  --verde: #5fd08e; --verde-fondo: #14301f;
+  --led-off: #274a78; --led-on: #ffd43b;
+  --codigo: #00204a; --sombra: none;
+}
+
+body { font-family: var(--deet-font); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { font-weight: 700; }
+
+/* Cabecera: azul marino institucional con filete azul */
+body > header { background: var(--deet-cab); color: #fff; border-bottom: 3px solid var(--deet-blue); }
+body > header h1 { color: #fff; }
+body > header h1 span, body > header .chip { color: var(--deet-sky); }
+body > header a, body > header nav a { color: var(--deet-sky); }
+body > header a:hover, body > header nav a:hover { background: rgba(182, 204, 231, .16); color: #fff; }
+body > header button { background: transparent; color: #fff; border-color: rgba(182, 204, 231, .55); }
+body > header button:hover { border-color: #fff; }
+body > header button.tema { background: transparent; color: #fff; border-color: rgba(182, 204, 231, .55); border-radius: 0; }
+body > header :focus-visible { outline-color: var(--deet-sky); }
+
+/* Esquinas rectas (el sitio DEET usa border-radius: 0); circulos solo en puntos y numeros */
+.tarjeta, .visor, .guia, .editor, button, a.boton, select, input, textarea, pre, .zona, .error, .ok,
+.docente-sol, .md blockquote, .respuesta, .detalle, .aviso, details, .caja, .capa, .paso, .buscar,
+.ayuda3d, nav a { border-radius: 0; }
+code, .md code, .led, .pill, .etq { border-radius: 2px; }
+
+/* Rotulos de tarjeta como los de la web: mayusculas pequenas con letra espaciada */
+.tarjeta h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--suave); }
+
+button, a.boton { transition: border-color .25s var(--deet-ease), background-color .25s var(--deet-ease); }
+button.activo { background: var(--deet-blue); border-color: var(--deet-blue); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  button, a.boton { transition: none; }
+}

@@ -19,9 +19,13 @@ Sin dependencias fuera de la biblioteca estandar (y mqtt_mini del tablero).
 """
 
 import asyncio
+import base64
+import binascii
 import json
 import os
 import hashlib
+import hmac
+import html
 import re
 import secrets
 import socket
@@ -42,7 +46,7 @@ import hmi_stone  # noqa: E402
 
 PASARELA = os.environ.get("PANEL_PASARELA", "172.30.99.1:7170")
 BROKER = os.environ.get("PANEL_BROKER", "172.30.99.50")
-PUERTO = 8090
+PUERTO = int(os.environ.get("PANEL_PUERTO", "8090"))
 AQUI = os.path.dirname(os.path.abspath(__file__))
 
 EQUIPOS_INO = {"t1.controllino": "tab1-controllino", "t2.controllino": "tab2-controllino",
@@ -61,8 +65,13 @@ mqtt_msgs = deque(maxlen=40)
 # Ultimo mensaje entero de cada tema (los eventos de ChirpStack pasan de 1 kB y llegan
 # cada 10 min: el autocorrector los busca aqui, no en la cola corta de la pagina).
 mqtt_ultimo = {}
+# Ascendentes LoRaWAN que ChirpStack publica (application/<app>/device/<deveui>/event/up), ya
+# desmenuzados: alimentan el panel «Asi debe salir» de la L10 (docente).
+uplinks = deque(maxlen=30)
+RX_UP = re.compile(r"^application/([^/]+)/device/([0-9a-f]{16})/event/up$")
 cerrojo = threading.Lock()
 _sock = None
+_cerrojo_envio = threading.Lock()
 
 
 # ── Pasarela ────────────────────────────────────────────────────────────────
@@ -79,15 +88,22 @@ def hilo_pasarela():
                 linea = f.readline()
                 if not linea:
                     break
-                d = json.loads(linea)
-                if d.get("t") == "estado":
-                    with cerrojo:
-                        estado["pasarela"] = d
-                        estado["pasarela_ok"] = True
-                    _toques_hmi(d.get("hmi_toques") or [])
-        except (OSError, ValueError):
+                try:
+                    d = json.loads(linea)
+                    if d.get("t") == "estado":
+                        with cerrojo:
+                            estado["pasarela"] = d
+                            estado["pasarela_ok"] = True
+                        _toques_hmi(d.get("hmi_toques") or [])
+                except (ValueError, TypeError, AttributeError, KeyError):
+                    continue             # una linea rara no debe matar este hilo ni cortar la conexion
+        except OSError:
             pass
         _sock = None
+        try:
+            s.close()
+        except (OSError, NameError, UnboundLocalError):
+            pass
         with cerrojo:
             estado["pasarela_ok"] = False
         time.sleep(2)
@@ -144,13 +160,36 @@ def a_pasarela(d: dict) -> bool:
     if s is None:
         return False
     try:
-        s.sendall((json.dumps(d) + "\n").encode())
+        with _cerrojo_envio:         # ThreadingHTTPServer: dos hilos no deben mezclar lineas
+            s.sendall((json.dumps(d) + "\n").encode())
         return True
     except OSError:
         return False
 
 
 # ── MQTT ────────────────────────────────────────────────────────────────────
+def _anotar_uplink(tema: str, txt: str):
+    """Evento `up` de ChirpStack v4 -> fila de la tabla de ascendentes (lo que ve el docente)."""
+    try:
+        d = json.loads(txt)
+        m = RX_UP.match(tema)
+        rx = (d.get("rxInfo") or [{}])[0]
+        lora = ((d.get("txInfo") or {}).get("modulation") or {}).get("lora") or {}
+        obj = d.get("object") or {}
+        uplinks.append({
+            "hora": time.strftime("%H:%M:%S"), "t": time.time(), "dev_eui": m.group(2), "app": m.group(1),
+            "fcnt": d.get("fCnt"), "fport": d.get("fPort"), "confirmado": bool(d.get("confirmed")),
+            "frec_mhz": round((d.get("txInfo") or {}).get("frequency", 0) / 1e6, 1) or None,
+            "canal": rx.get("channel"), "sf": lora.get("spreadingFactor"), "bw": lora.get("bandwidth"),
+            "dr": d.get("dr"), "rssi": rx.get("rssi"), "snr": rx.get("snr"),
+            "nombre": (d.get("deviceInfo") or {}).get("deviceName"),
+            "temperatura": obj.get("temperatura"), "nivel": obj.get("nivel"),
+            "alarma_temp": obj.get("alarma_temp"), "alarma_nivel": obj.get("alarma_nivel"),
+            "ts_nodo": obj.get("ts_nodo"), "decodificado": bool(obj), "bytes": len(base64.b64decode(d.get("data") or ""))})
+    except (ValueError, TypeError, AttributeError, binascii.Error):
+        pass
+
+
 def hilo_mqtt():
     async def bucle():
         while True:
@@ -160,6 +199,8 @@ def hilo_mqtt():
                 mqtt_msgs.append({"hora": time.strftime("%H:%M:%S"), "tema": tema, "carga": txt[:200]})
                 mqtt_ultimo[tema] = {"hora": time.strftime("%H:%M:%S"), "t": time.time(), "tema": tema,
                                      "carga": txt[:8000]}
+                if RX_UP.match(tema):
+                    _anotar_uplink(tema, txt)
                 if len(mqtt_ultimo) > 400:
                     for k in sorted(mqtt_ultimo, key=lambda k: mqtt_ultimo[k]["t"])[:100]:
                         mqtt_ultimo.pop(k, None)
@@ -174,7 +215,12 @@ def hilo_mqtt():
 
 # ── Docker ──────────────────────────────────────────────────────────────────
 def docker(*args, timeout=120):
-    r = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
+    try:
+        r = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
+    except FileNotFoundError:
+        return 127, "docker no esta instalado o no esta en el PATH"
+    except subprocess.TimeoutExpired:
+        return 124, "docker %s no contesto en %d s" % (args[0] if args else "", timeout)
     return r.returncode, (r.stdout + r.stderr)
 
 
@@ -193,6 +239,7 @@ def contenedores():
     return c
 
 
+_cerrojos_subida = {}
 subidos = {}          # equipo -> {nombre, sha256, hora} del ultimo .ino subido desde aqui
 
 
@@ -212,7 +259,12 @@ NOMBRE_USB = {"controllino": "USB-B del Controllino (al lado del Ethernet)",
 
 def subir(equipo: str, nombre: str, datos: bytes, sin_usb: bool = False):
     """Lo mismo que `.\\lab.ps1 subir`: compila y, si va bien, reinicia."""
-    nombre = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.basename(nombre))
+    nombre = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.basename(nombre or ""))
+    with _cerrojos_subida.setdefault(equipo, threading.Lock()):   # dos subidas a la vez se pisarian la carpeta fuente
+        return _subir(equipo, nombre, datos, sin_usb)
+
+
+def _subir(equipo: str, nombre: str, datos: bytes, sin_usb: bool):
     if equipo in EQUIPOS_INO:
         if not nombre.endswith(".ino"):
             return False, "Para %s hace falta un archivo .ino" % equipo
@@ -238,7 +290,7 @@ def subir(equipo: str, nombre: str, datos: bytes, sin_usb: bool = False):
         c = EQUIPOS_ST[equipo]
         if contenedores().get(c, {}).get("estado") != "running":
             return False, "OpenPLC no esta en marcha: en PowerShell, .\\lab.ps1 openplc"
-        tmp = "/tmp/" + nombre
+        tmp = "/tmp/%s_%s" % (secrets.token_hex(4), nombre)      # nombre unico: dos subidas no se pisan
         # El editor nuevo (2024) mete en el .st comentarios "(*DBG: ...*)" con el
         # codigo del depurador; el runtime de la imagen (2019) no los entiende y
         # falla con "unknown syntax error". Se quitan: no cambian el programa.
@@ -246,7 +298,13 @@ def subir(equipo: str, nombre: str, datos: bytes, sin_usb: bool = False):
         limpio = salto.join(l for l in datos.split(salto) if not l.lstrip().startswith(b"(*DBG:"))
         with open(tmp, "wb") as f:
             f.write(limpio)
-        rc, out = docker("cp", tmp, "%s:/root/OpenPLC_v3/webserver/st_files/%s" % (c, nombre))
+        try:
+            rc, out = docker("cp", tmp, "%s:/root/OpenPLC_v3/webserver/st_files/%s" % (c, nombre))
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
         if rc == 0:
             rc, out = docker("exec", c, "python2", "/openplc/cargar.py", nombre)
         if rc != 0:
@@ -339,9 +397,10 @@ def proyectos():
 
 def cargar(rel: str, equipo: str):
     ruta = os.path.realpath(os.path.join(PROYECTOS, rel))
-    if not ruta.startswith(os.path.realpath(PROYECTOS) + os.sep) or not ruta.endswith(".st"):
+    if not ruta.startswith(os.path.realpath(PROYECTOS) + os.sep) or not ruta.endswith(".st") or not os.path.isfile(ruta):
         return False, "Archivo no valido"
-    nombre = rel.split("/")[-3] + ".st" if rel.endswith("build/generated_plc.st") else os.path.basename(rel)
+    partes = rel.replace("\\", "/").split("/")
+    nombre = partes[-3] + ".st" if rel.endswith("build/generated_plc.st") and len(partes) >= 3 else os.path.basename(rel)
     with open(ruta, "rb") as f:
         return subir(equipo, nombre, f.read())
 
@@ -352,8 +411,56 @@ def cargar(rel: str, equipo: str):
 # guarda solo como SHA-256 en panel/clave_docente.sha256, que NO va en el paquete de los
 # alumnos (.gitattributes export-ignore), igual que esos ejemplos: sin ese archivo no hay
 # modo docente. `.\lab.ps1 clave-docente` la cambia.
-CLAVE_DOCENTE = os.path.join(AQUI, "clave_docente.sha256")
-_tokens_docente = set()
+# PANEL_CLAVE_ARCHIVO solo lo usan las pruebas (un hash temporal): en el banco no se define.
+CLAVE_DOCENTE = os.environ.get("PANEL_CLAVE_ARCHIVO") or os.path.join(AQUI, "clave_docente.sha256")
+# La sesion del docente sobrevive a un reinicio del panel: tablero/run/docente_sesiones.json guarda el
+# SHA-256 de cada ficha (nunca la clave ni su hash) con su caducidad. Si la clave cambia (el archivo
+# de la clave es mas nuevo que la sesion) las sesiones dejan de valer.
+SESIONES_DOCENTE = os.environ.get("PANEL_SESIONES_ARCHIVO") or os.path.join(RAIZ, "run", "docente_sesiones.json")
+SESION_DOCENTE_S = 24 * 3600
+_tokens_docente = {}          # sha256(ficha) -> {"hasta": epoch, "desde": epoch}
+_cerrojo_sesiones = threading.Lock()
+_cerrojo_intentos = threading.Lock()   # serializa los intentos de clave (frena la fuerza bruta)
+
+
+def _huella(ficha: str) -> str:
+    return hashlib.sha256(ficha.encode("utf-8")).hexdigest()
+
+
+def _guardar_sesiones():
+    try:
+        with _cerrojo_sesiones:      # varios hilos HTTP: sin esto json.dump ve el dict cambiar
+            os.makedirs(os.path.dirname(SESIONES_DOCENTE), exist_ok=True)
+            tmp = SESIONES_DOCENTE + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                json.dump(dict(_tokens_docente), f)
+            os.replace(tmp, SESIONES_DOCENTE)
+    except (OSError, RuntimeError):
+        pass
+
+
+def _cargar_sesiones():
+    try:
+        with open(SESIONES_DOCENTE, encoding="utf-8") as f:
+            d = json.load(f)
+        clave_t = os.path.getmtime(CLAVE_DOCENTE)
+    except (OSError, ValueError):
+        return
+    ahora = time.time()
+    for h, v in (d if isinstance(d, dict) else {}).items():
+        if isinstance(v, dict) and v.get("hasta", 0) > ahora and v.get("desde", 0) >= clave_t:
+            _tokens_docente[h] = v
+
+
+def _ficha_valida(ficha: str) -> bool:
+    v = _tokens_docente.get(_huella(ficha))
+    if v is None:
+        return False
+    if v["hasta"] < time.time():
+        _tokens_docente.pop(_huella(ficha), None)
+        return False
+    return True
 
 
 def soluciones() -> set:
@@ -377,7 +484,7 @@ def clave_valida(clave: str) -> bool:
             esperado = f.read().split()[0].strip().lower()
     except (OSError, IndexError):
         return False
-    return hashlib.sha256(clave.encode("utf-8")).hexdigest() == esperado
+    return hmac.compare_digest(hashlib.sha256(clave.encode("utf-8")).hexdigest(), esperado)
 
 
 def ejemplos(docente=False):
@@ -502,6 +609,7 @@ def preparar(equipo: str, modo: str):
 
 # ── Practicas y autocorrector ───────────────────────────────────────────────
 PRACTICAS = os.path.join(RAIZ, "practicas")
+_cerrojo_verif = threading.Lock()
 verif = {"corriendo": False, "practica": "", "pasos": [], "actual": -1, "fin": None, "informe": None}
 
 
@@ -706,20 +814,46 @@ def _dir_host_tablero():
     return src.rstrip("/") if rc == 0 and src else ""
 
 
+pilas = {}          # id de practica -> {estado: subiendo|ok|error, detalle, t}
+
+
 def levantar_pila(pid: str):
-    """`docker compose -p <id> up -d` de run/pc/<id>/docker-compose.yml, como lo haria el alumno."""
-    base = _dir_host_tablero()
+    """`docker compose -p <id> up -d` de run/pc/<id>/docker-compose.yml, como lo haria el alumno.
+    Si falla no deja la pila a medias: se baja (sin tocar volumenes) y el motivo queda en `pilas`."""
+    pilas[pid] = {"estado": "subiendo", "detalle": "", "t": time.time()}
+    base = os.environ.get("PANEL_DIR_HOST") or _dir_host_tablero()
     fichero = os.path.join(RAIZ, "run", "pc", pid, "docker-compose.yml")
     if not base or not os.path.isfile(fichero):
-        return False, "no se pudo localizar la carpeta del banco"
-    rc, out = docker("compose", "-p", pid.lower(), "-f", fichero, "--project-directory",
-                     "%s/run/pc/%s" % (base, pid), "up", "-d", timeout=900)
+        pilas[pid].update(estado="error", detalle="no se pudo localizar la carpeta del banco")
+        return False, pilas[pid]["detalle"]
+    args = ["compose", "-p", pid.lower(), "-f", fichero, "--project-directory", "%s/run/pc/%s" % (base, pid)]
+    rc, out = docker(*args, "up", "-d", timeout=900)
+    det = out.strip().splitlines()[-1][:160] if out.strip() else ""
     if rc != 0:                                      # corre en segundo plano: que quede en el registro
         print("PILA %s no arranco: %s" % (pid, out.strip()[-400:]), flush=True)
-    return rc == 0, out.strip().splitlines()[-1][:160] if out.strip() else ""
+        docker(*args, "down", "--remove-orphans", timeout=120)      # sin -v: los datos se quedan
+        det = "no arranco (%s); se bajo lo que habia subido" % (det or "sin detalle")
+    pilas[pid].update(estado="ok" if rc == 0 else "error", detalle=det, t=time.time())
+    return rc == 0, det
 
 
-def montar_practica(pid: str):
+RX_MODULO = re.compile(r"\.(pot|dht11|boton\d|motor|foco|led|mm)\.")
+
+
+def cablear_solucion(p: dict):
+    """Cables de la solucion de una practica: los de la red van a la pasarela; los de los modulos
+    (potenciometro...) son del 3D y se devuelven para que el portal se los pase. -> (modulos, n_red)"""
+    modulos, n = [], 0
+    for i, par in enumerate(p["solucion_cables"]):
+        if RX_MODULO.search("%s %s" % (par[0], par[1])):
+            modulos.append(par)
+            continue
+        a_pasarela({"t": "cable", "id": "sol%s_%d" % (p["id"], i), "a": par[0], "b": par[1]})
+        n += 1
+    return modulos, n
+
+
+def montar_practica(pid: str, pila: bool = True):
     p = leer_practica(pid)
     if p is None:
         return False, "Práctica desconocida"
@@ -777,7 +911,7 @@ def montar_practica(pid: str):
     extra = " · archivos en ~/trabajo/%s del PC" % pid if hay else ""
     if reiniciados:
         extra += " · %s vuelve%s al programa de fábrica" % (", ".join(reiniciados), "n" if len(reiniciados) > 1 else "")
-    if m.get("pila"):                                 # la pila Docker de la practica queda levantada
+    if m.get("pila") and pila:                        # la pila Docker de la practica queda levantada
         # En segundo plano: la primera vez puede bajar imagenes grandes (Odoo, ChirpStack...).
         threading.Thread(target=levantar_pila, args=(pid,), daemon=True).start()
         extra += " · levantando tu pila Docker en segundo plano (la primera vez puede tardar varios minutos)"
@@ -786,6 +920,520 @@ def montar_practica(pid: str):
     if bajadas_otras:
         extra += " · se bajó la pila de %s (tus datos se conservan)" % ", ".join(bajadas_otras)
     return True, "Tablero preparado para %s%s" % (pid, extra)
+
+
+# ── Demostracion completa de la L10 (docente) ───────────────────────────────
+# Un boton hace lo que el docente haria a mano: Preparar, antena, cables, los dos .ino, la pila de
+# ChirpStack, el alta del nodo, el flujo de Node-RED y espera el primer ascendente. Cada paso deja
+# su estado (pend|ahora|ok|error|omitido) y los segundos que tardo; si uno falla se para ahi, con el
+# motivo, y «Reintentar desde aquí» sigue sin repetir lo anterior.
+L10_CHIRPSTACK = os.environ.get("PANEL_CHIRPSTACK", "host.docker.internal:8089")      # gRPC / web (anfitrion)
+L10_CHIRPSTACK_LAN = "192.168.1.81:8080"                                              # lo mismo, desde tab_lan
+L10_PASOS = [("imagenes", "Imágenes de Docker"), ("preparar", "Preparar el tablero"),
+             ("antena", "Antena de 915 MHz atornillada"), ("cables", "Cables de la solución"),
+             ("controllino", "Programa del Controllino (esclavo L10)"),
+             ("esp32", "Programa del ESP32 (nodo + pasarela, periodo de demo)"),
+             ("chirpstack", "ChirpStack arriba (postgres, redis, bridge)"), ("provision", "Nodo dado de alta en ChirpStack"),
+             ("nodered", "Flujo de Node-RED cargado"), ("uplink", "Primer ascendente hasta planta/lorawan/temperatura")]
+lora_demo = {"corriendo": False, "pasos": [], "error": None, "t0": 0, "modulos": [], "resumen": ""}
+
+
+class PasoFallido(Exception):
+    pass
+
+
+def _docker_vivo():
+    rc, out = docker("version", "--format", "{{.Server.Version}}", timeout=15)
+    if rc != 0 or not out.strip():
+        raise PasoFallido("Docker no responde (%s). Abre Docker Desktop y espera a que diga «running»; "
+                          "luego «Reintentar desde aquí»." % (out.strip().splitlines() or ["sin salida"])[-1][:140])
+
+
+def _esperar(cond, limite, cada=1.5):
+    """Repite `cond()` hasta que devuelva algo verdadero o pase el limite. -> ultimo valor"""
+    t0, v = time.time(), None
+    while time.time() - t0 < limite:
+        v = cond()
+        if v:
+            return v
+        time.sleep(cada)
+    return v
+
+
+def l10_config():
+    p = leer_practica("L10") or {}
+    return dict({"periodo_ms": 20000, "controllino": "controllino_esclavo_l10", "esp32": "esp32plc_lora_pasarela",
+                 "join_eui": "70B3D57ED0000010", "dev_eui": "0004A30B001F7A01", "a0": 600, "a1": 300,
+                 "espera_uplink_s": 300}, **p.get("demo_lora", {}))
+
+
+def l10_appkey():
+    """La AppKey de la demo: se crea una vez y se conserva en run/ (el nodo y ChirpStack la comparten)."""
+    ruta = os.path.join(RAIZ, "run", "l10_demo_appkey")
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            k = f.read().strip()
+        if re.fullmatch(r"[0-9A-Fa-f]{32}", k):
+            return k.upper()
+    except OSError:
+        pass
+    k = secrets.token_hex(16).upper()
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with open(ruta, "w", encoding="utf-8") as f:
+        f.write(k + "\n")
+    return k
+
+
+_cache_plan = {"t": 0, "v": None}
+
+
+def l10_plan():
+    """Lo que la demo va a necesitar bajar de Docker Hub (para avisar ANTES de empezar). En cache 20 s."""
+    if time.time() - _cache_plan["t"] < 20 and _cache_plan["v"] is not None:
+        return _cache_plan["v"]
+    try:
+        _docker_vivo()
+        vivo, motivo = True, ""
+    except PasoFallido as e:
+        vivo, motivo = False, str(e)
+    paq = (paquetes_imagenes().get("L10") or {"imagenes": []}) if vivo else {"imagenes": []}
+    faltan = [i for i in paq["imagenes"] if i["bytes"] is None]
+    v = {"docker": vivo, "motivo": motivo,
+         "imagenes": [{"nombre": i["nombre"], "bytes": i["bytes"], "aprox": APROX_IMG.get(i["nombre"])} for i in paq["imagenes"]],
+         "faltan": [{"nombre": i["nombre"], "aprox": APROX_IMG.get(i["nombre"], 0)} for i in faltan],
+         "faltan_aprox_bytes": sum(APROX_IMG.get(i["nombre"], 0) for i in faltan)}
+    _cache_plan.update(t=time.time(), v=v)
+    return v
+
+
+# Tamano en disco de las imagenes de la L10 (medido con `docker image inspect`; solo para avisar).
+APROX_IMG = {"chirpstack/chirpstack:4": 82_000_000, "chirpstack/chirpstack-gateway-bridge:4": 36_000_000,
+             "postgres:14-alpine": 415_000_000, "redis:7-alpine": 58_000_000}
+
+
+def _paso_imagenes(cfg):
+    _docker_vivo()
+    paq = paquetes_imagenes().get("L10")
+    pend = [i["nombre"] for i in (paq or {"imagenes": []})["imagenes"] if i["bytes"] is None]
+    if not pend:
+        return "ya están en este PC"
+    bajadas["L10"] = {"estado": "bajando", "actual": pend[0], "hechas": 0, "total": len(pend), "salida": "", "t": time.time()}
+    _bajar("L10", pend)
+    b = bajadas["L10"]
+    _cache_plan["t"] = 0
+    if b.get("estado") != "listo":
+        raise PasoFallido("%s Comprueba la conexión a Internet; las imágenes que ya bajó se conservan." % b.get("salida", "no se pudo bajar"))
+    return "bajadas: " + ", ".join(pend)
+
+
+def _paso_preparar(cfg):
+    _docker_vivo()
+    if not estado["pasarela_ok"]:
+        raise PasoFallido("La pasarela del banco no contesta (%s). Arranca el banco con .\\lab.ps1 arrancar." % PASARELA)
+    ok, txt = montar_practica("L10", pila=False)
+    if not ok:
+        raise PasoFallido(txt)
+    def listos():
+        with cerrojo:
+            eqs = (estado["pasarela"] or {}).get("equipos") or {}
+        return all((eqs.get(e) or {}).get("encendido") for e in ("t1.controllino", "t1.esp32plc"))
+    if not _esperar(listos, 30):
+        raise PasoFallido("t1.controllino / t1.esp32plc no informan encendidos tras Preparar (docker ps -a --filter name=tab1).")
+    return txt.split(" · ")[0]
+
+
+def _paso_antena(cfg):
+    a_pasarela({"t": "orden", "equipo": "t1.esp32plc", "orden": {"cmd": "lora", "antena": True, "pos": "P1"}})
+    def puesta():
+        with cerrojo:
+            lora = (((estado["pasarela"] or {}).get("equipos") or {}).get("t1.esp32plc") or {}).get("lora") or {}
+        return lora.get("antena") and not lora.get("danado")
+    if not _esperar(puesta, 10):
+        raise PasoFallido("El ESP32 no confirma la antena (lora.antena). ¿Está encendido? Si el RN2903 salió dañado, "
+                          "usa «Cambiar el módulo RN2903 averiado» y reintenta.")
+    return "antena puesta, nodo en P1"
+
+
+def _paso_cables(cfg):
+    p = leer_practica("L10") or {}
+    if not p.get("solucion_cables"):
+        raise PasoFallido("L10/practica.json no trae solucion_cables")
+    modulos, n = cablear_solucion(p)
+    # Con o sin 3D abierto, el potenciometro queda en un valor conocido (el 3D lo sigue si esta abierto).
+    montar_ordenes([["t1.controllino", {"cmd": "analogica", "i": 0, "v": int(cfg["a0"])}],
+                    ["t1.controllino", {"cmd": "analogica", "i": 1, "v": int(cfg["a1"])}]])
+    lora_demo["modulos"] = modulos
+    return "%d cables de red, %d de módulos (P1→A0, P2→A1; el portal los pasa al 3D) y A0=%s, A1=%s" % (n, len(modulos), cfg["a0"], cfg["a1"])
+
+
+def montar_ordenes(ordenes):
+    ok = True
+    for eq, o in ordenes:
+        ok = a_pasarela({"t": "orden", "equipo": str(eq), "orden": o}) and ok
+    return ok
+
+
+def _subir_demo(equipo, nombre_ej, cambios=None):
+    ej = leer_ejemplo(nombre_ej)
+    if ej is None:
+        raise PasoFallido("Falta el ejemplo %s en ejemplos_arduino/" % nombre_ej)
+    datos = ej[1]
+    if cambios:
+        datos = cambios(datos.decode("utf-8", "replace")).encode("utf-8")
+    ok, txt = subir(equipo, ej[0], datos, sin_usb=True)          # el USB ya lo pone el montaje de la practica
+    if not ok:
+        raise PasoFallido("%s no se pudo programar: %s" % (equipo, txt.strip()[-300:]))
+    return txt.strip().splitlines()[-1][:120] if txt.strip() else "subido"
+
+
+def _paso_controllino(cfg):
+    return _subir_demo("t1.controllino", cfg["controllino"])
+
+
+def _paso_esp32(cfg):
+    clave = l10_appkey()
+    def poner(src):
+        src, n1 = re.subn(r'(JOIN_EUI\s*=\s*")[0-9A-Fa-f]*(")', r"\g<1>%s\g<2>" % cfg["join_eui"], src)
+        src, n2 = re.subn(r'(APP_KEY\s*=\s*")[0-9A-Fa-f]*(")', r"\g<1>%s\g<2>" % clave, src)
+        if n1 != 1 or n2 != 1:
+            raise PasoFallido("El sketch ya no tiene las líneas JOIN_EUI / APP_KEY que espera la demo")
+        return "#define PERIODO_MS %dUL\n" % int(cfg["periodo_ms"]) + src
+    r = _subir_demo("t1.esp32plc", cfg["esp32"], poner)
+    return "%s · un envío cada %g s" % (r, int(cfg["periodo_ms"]) / 1000)
+
+
+def _estado_contenedor(nombre):
+    rc, out = docker("inspect", "-f", "{{.State.Status}}|{{.RestartCount}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}",
+                     nombre, timeout=10)
+    if rc != 0:
+        return None
+    est, reinicios, salud = (out.strip().split("|") + ["", ""])[:3]
+    return {"estado": est, "reinicios": int(reinicios or 0), "salud": salud}
+
+
+def _http_vivo(url, limite=2):
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url, timeout=limite) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def _pila_lista():
+    """None si esta lista; si no, el motivo. Sin esperas a ciegas: cada servicio se interroga."""
+    sondas = [("l10-postgres", ["exec", "l10-postgres", "pg_isready", "-U", "chirpstack"], None),
+              ("l10-redis", ["exec", "l10-redis", "redis-cli", "ping"], "PONG"),
+              ("l10-gateway-bridge", None, None), ("l10-chirpstack", None, None)]
+    for nombre, args, espera in sondas:
+        c = _estado_contenedor(nombre)
+        if c is None:
+            return "%s no existe" % nombre
+        if c["estado"] != "running" or c["salud"] in ("unhealthy", "starting"):   # "restarting" tambien cae aqui
+            return "%s: %s%s" % (nombre, c["estado"], " (%s)" % c["salud"] if c["salud"] else "")
+        # RestartCount no baja nunca: ChirpStack se reinicia 2-3 veces mientras postgres arranca y es normal.
+        if args:
+            rc, out = docker(*args, timeout=10)
+            if rc != 0 or (espera and espera not in out):
+                return "%s no está listo (%s)" % (nombre, (out.strip().splitlines() or ["sin respuesta"])[-1][:80])
+    if not _http_vivo("http://%s/" % L10_CHIRPSTACK):
+        return "la web de ChirpStack aún no contesta en %s" % L10_CHIRPSTACK
+    return None
+
+
+def _paso_chirpstack(cfg):
+    _docker_vivo()
+    rc, out = docker("network", "inspect", "tab_lan", "--format", "{{.Name}}", timeout=10)
+    if rc != 0:
+        raise PasoFallido("No existe la red tab_lan: el banco no está arrancado (.\\lab.ps1 arrancar).")
+    # Esta practica monta su pila aqui, no en segundo plano (Preparar de la demo la omite).
+    destino = os.path.join(RAIZ, "run", "pc", "L10")
+    if not os.path.isfile(os.path.join(destino, "docker-compose.yml")):
+        raise PasoFallido("Falta %s: el paso «Preparar» no copió los archivos de la práctica." % destino)
+    ok, det = levantar_pila("L10")
+    if not ok:
+        raise PasoFallido("docker compose up falló: %s. Si dice «pool overlaps»/«address already in use» hay otra pila usando "
+                          "192.168.1.80/.81; si no encuentra la red, falta arrancar el banco." % det)
+    ult = [None]
+    def lista():
+        ult[0] = _pila_lista()
+        return ult[0] is None
+    if not _esperar(lista, 150, 3):
+        rc2, logs = docker("logs", "--tail", "4", "l10-chirpstack", timeout=10)
+        raise PasoFallido("La pila no llegó a estar lista en 150 s: %s. ChirpStack dice: %s" % (ult[0], " | ".join(logs.strip().splitlines()[-3:])[:260]))
+    return "postgres, redis, bridge y ChirpStack listos"
+
+
+def _provisionar_l10(appkey, cfg):
+    script = os.path.join(RAIZ, "herramientas", "l10_provisionar.py")
+    ids = os.path.join(RAIZ, "run", "l10_ids.json")
+    try:
+        os.remove(ids)
+    except OSError:
+        pass
+    comun = ["--appkey", appkey, "--joineui", cfg["join_eui"], "--deveui", cfg["dev_eui"]]
+    try:
+        import grpc, chirpstack_api  # noqa: F401
+        cmd = [sys.executable, script, "--servidor", L10_CHIRPSTACK, "--json", ids] + comun
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        rc, out = r.returncode, r.stdout + r.stderr
+    except ImportError:
+        # El contenedor del panel no trae grpc: una vez, en un Python desechable dentro de tab_lan.
+        base = os.environ.get("PANEL_DIR_HOST") or _dir_host_tablero()
+        if not base:
+            raise PasoFallido("No se pudo localizar la carpeta del banco para el contenedor de aprovisionamiento")
+        rc, out = docker("run", "--rm", "--network", "tab_lan", "-v", "%s:/t" % base, "python:3.12-slim", "sh", "-c",
+                         "pip install -q --disable-pip-version-check grpcio chirpstack-api >/dev/null 2>&1 && "
+                         "python /t/herramientas/l10_provisionar.py --servidor %s --json /t/run/l10_ids.json %s"
+                         % (L10_CHIRPSTACK_LAN, " ".join(comun)), timeout=420)
+    return rc, out, ids
+
+
+def _paso_provision(cfg):
+    clave = l10_appkey()
+    rc, out, ids = _provisionar_l10(clave, cfg)
+    if rc != 0:
+        raise PasoFallido("l10_provisionar.py falló: %s" % (out.strip().splitlines() or ["sin salida"])[-1][:240])
+    try:
+        with open(ids, encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        d = {}
+    cambio = "AppKey CAMBIADA" in out
+    return "dispositivo %s en la aplicación %s%s" % (cfg["dev_eui"], (d.get("app_id") or "?")[:8],
+                                                    " · la clave cambió: el ESP32 ya lleva la nueva" if cambio else "")
+
+
+def nodered_url():
+    """Node-RED al que se manda el flujo: PANEL_NODERED, el de ot-lab si corre (1880) o el del banco (1890)."""
+    if os.environ.get("PANEL_NODERED"):
+        return os.environ["PANEL_NODERED"].rstrip("/"), "Node-RED (PANEL_NODERED)"
+    rc, out = docker("inspect", "-f", "{{.State.Running}}", "node-red", timeout=10)
+    if rc == 0 and out.strip() == "true":
+        return "http://host.docker.internal:1880", "Node-RED de ot-lab"
+    return "http://host.docker.internal:1890", "Node-RED del banco"
+
+
+def _paso_nodered(cfg):
+    url, quien = nodered_url()
+    if not os.environ.get("PANEL_NODERED") and "1890" in url:
+        rc, out = docker("inspect", "-f", "{{.State.Running}}", "tab-nodered", timeout=10)
+        if rc != 0:
+            raise PasoFallido("No existe el contenedor tab-nodered: créalo con .\\lab.ps1 nodered y reintenta.")
+        if out.strip() != "true":
+            docker("start", "tab-nodered", timeout=60)
+    import urllib.request
+    def vivo():
+        try:
+            with urllib.request.urlopen(url + "/settings", timeout=3) as r:
+                return r.status == 200
+        except Exception:
+            return False
+    if not _esperar(vivo, 90, 3):
+        raise PasoFallido("%s no contesta en %s (tarda ~20 s en arrancar; docker logs tab-nodered)." % (quien, url))
+    sys.path.insert(0, os.path.join(RAIZ, "herramientas"))
+    try:
+        import l10_flujo_referencia as ref
+    except ImportError as e:
+        raise PasoFallido("Falta herramientas/l10_flujo_referencia.py (%s)" % e)
+    try:
+        ref.desplegar(url, "poner")
+    except Exception as e:
+        raise PasoFallido("%s rechazó el flujo: %s" % (quien, str(e)[:200]))
+    lora_demo["t_flujo"] = time.time()
+    return "pestaña «L10 referencia» desplegada en %s (%s)" % (quien, url.replace("host.docker.internal", "localhost"))
+
+
+def _paso_uplink(cfg):
+    t0 = time.time()
+    def llega():
+        return next((u for u in reversed(uplinks) if u["t"] >= lora_demo["t0"] and u["dev_eui"] == cfg["dev_eui"].lower()), None)
+    up = _esperar(llega, cfg["espera_uplink_s"], 2)
+    if not up:
+        raise PasoFallido("Sin ascendente en %d s. %s" % (cfg["espera_uplink_s"], _donde_se_rompe()))
+    if not up.get("decodificado"):
+        raise PasoFallido("Llegó el ascendente fCnt %s pero ChirpStack no lo decodificó (¿perfil sin el decodificador?)." % up["fcnt"])
+    t_flujo = lora_demo.get("t_flujo", lora_demo["t0"])
+    espera = 2 * int(cfg["periodo_ms"]) / 1000.0 + 15          # hasta dos periodos: el flujo puede cargar entre ascendentes
+    pl = _esperar(lambda: (mqtt_ultimo.get("planta/lorawan/temperatura") or {}).get("t", 0) >= t_flujo, espera, 1)
+    if not pl:
+        raise PasoFallido("Llegó el ascendente fCnt %s (temperatura %s) pero Node-RED no publicó planta/lorawan/temperatura en %.0f s. "
+                          "Abre el editor de Node-RED: ¿el mqtt in está conectado a 192.168.1.50?" % (up["fcnt"], up["temperatura"], espera))
+    return "fCnt %s · %s °C · %s %% · %.0f s de espera" % (up["fcnt"], up["temperatura"], up["nivel"], time.time() - t0)
+
+
+FUNCIONES_L10 = {"imagenes": _paso_imagenes, "preparar": _paso_preparar, "antena": _paso_antena, "cables": _paso_cables,
+                 "controllino": _paso_controllino, "esp32": _paso_esp32, "chirpstack": _paso_chirpstack,
+                 "provision": _paso_provision, "nodered": _paso_nodered, "uplink": _paso_uplink}
+
+
+def _correr_lora_demo(desde: str):
+    ids = [p[0] for p in L10_PASOS]
+    cfg = l10_config()
+    i0 = ids.index(desde)
+    for i, (pid, nombre) in enumerate(L10_PASOS):
+        paso = lora_demo["pasos"][i]
+        if i < i0:
+            continue
+        paso.update(estado="ahora", detalle="", seg=0, t=time.time())
+        try:
+            paso["detalle"] = FUNCIONES_L10[pid](cfg) or ""
+            paso["estado"] = "ok"
+        except PasoFallido as e:
+            paso.update(estado="error", detalle=str(e))
+            lora_demo["error"] = {"paso": pid, "nombre": nombre, "msg": str(e)}
+            break
+        except Exception as e:                                   # un fallo inesperado tambien se explica
+            paso.update(estado="error", detalle="%s: %s" % (type(e).__name__, str(e)[:200]))
+            lora_demo["error"] = {"paso": pid, "nombre": nombre, "msg": paso["detalle"]}
+            break
+        finally:
+            paso["seg"] = round(time.time() - paso["t"], 2)
+    else:
+        lora_demo["resumen"] = "Listo en %.0f s: mueve los sliders de A0/A1 y mira cambiar el siguiente ascendente." % (time.time() - lora_demo["t0"])
+    lora_demo["corriendo"] = False
+
+
+def lanzar_lora_demo(desde: str = ""):
+    ids = [p[0] for p in L10_PASOS]
+    if lora_demo["corriendo"]:
+        return False, "Ya hay una demostración en curso"
+    if desde and desde not in ids:
+        return False, "Paso desconocido: %s" % desde
+    desde = desde or ids[0]
+    previos = {p["id"]: p for p in lora_demo["pasos"]}
+    lora_demo.update(corriendo=True, error=None, resumen="", t0=time.time())
+    if desde == ids[0]:
+        lora_demo["modulos"] = []
+    lora_demo["pasos"] = [
+        dict(previos[pid]) if pid in previos and ids.index(pid) < ids.index(desde)
+        else {"id": pid, "nombre": nombre, "estado": "pend", "detalle": "", "seg": 0}
+        for pid, nombre in L10_PASOS]
+    threading.Thread(target=_correr_lora_demo, args=(desde,), daemon=True).start()
+    return True, "Demostración en marcha"
+
+
+# ── «Asi debe salir»: la cadena entera de la L10, un vistazo ────────────────
+def _donde_se_rompe():
+    for c in cadena_l10():
+        if c["estado"] != "ok":
+            return "La cadena se rompe en «%s»: %s." % (c["nombre"], c["detalle"])
+    return "Toda la cadena parece sana (revisa el periodo de envío del sketch)."
+
+
+_cache_cs = {"t": 0, "v": None}
+
+
+def cadena_l10():
+    cfg = l10_config()
+    ahora = time.time()
+    with cerrojo:
+        eqs = (estado["pasarela"] or {}).get("equipos") or {}
+        pas_ok = estado["pasarela_ok"]
+    esp = eqs.get("t1.esp32plc") or {}
+    lora = esp.get("lora") or {}
+    ult = lora.get("ultima") or {}
+    cad = []
+    def c(id_, nombre, est, det):
+        cad.append({"id": id_, "nombre": nombre, "estado": est, "detalle": det})
+    # 1 nodo unido
+    if not pas_ok:
+        c("nodo", "Nodo unido (RN2903)", "fallo", "la pasarela del banco no contesta; sin ella no hay estado del ESP32")
+    elif not lora:
+        c("nodo", "Nodo unido (RN2903)", "fallo", "el ESP32 no informa del módulo LoRa")
+    elif lora.get("danado"):
+        c("nodo", "Nodo unido (RN2903)", "fallo", "RN2903 dañado (emitió sin antena): «Cambiar el módulo»")
+    elif not lora.get("antena"):
+        c("nodo", "Nodo unido (RN2903)", "fallo", "antena sin atornillar")
+    elif not lora.get("unido"):
+        c("nodo", "Nodo unido (RN2903)", "espera", "sin unir todavía (reintenta a los 15, 30, 60, 120 s; ¿está dado de alta en ChirpStack con la misma AppKey?)")
+    elif not re.fullmatch(r"8-15(,6[4-9](-7[01])?|,7[01])*", str(lora.get("canales", ""))):
+        c("nodo", "Nodo unido (RN2903)", "fallo", "unido pero con canales %s (debe ser 8-15 y los de 500 kHz)" % lora.get("canales"))
+    else:
+        c("nodo", "Nodo unido (RN2903)", "ok", "DevAddr %s · canales %s · DR%s" % (lora.get("devaddr"), lora.get("canales"), lora.get("dr")))
+    # 2 pasarela
+    try:
+        with open(os.path.join(RAIZ, "run", "lora", "pasarela.json"), encoding="utf-8") as f:
+            pj = json.load(f)
+        vivo = ahora - pj.get("t", 0) < 6
+    except (OSError, ValueError):
+        pj, vivo = {}, False
+    if not vivo:
+        c("pasarela", "Pasarela LoRaWAN con backhaul", "fallo", "tab-lora no escribe su estado (docker ps --filter name=tab-lora)")
+    elif not pj.get("backhaul"):
+        c("pasarela", "Pasarela LoRaWAN con backhaul", "fallo", "sin cable: enchufa lora.eth al puerto 4 del switch")
+    elif not pj.get("ult_ack"):
+        c("pasarela", "Pasarela LoRaWAN con backhaul", "fallo", "el servidor de red no le contesta (ChirpStack abajo o servidor mal en /lora)")
+    else:
+        c("pasarela", "Pasarela LoRaWAN con backhaul", "ok", "backhaul arriba · último ACK del servidor %s" % pj["ult_ack"])
+    # 3 ChirpStack recibe
+    if ahora - _cache_cs["t"] > 5:
+        _cache_cs["v"] = _http_vivo("http://%s/" % L10_CHIRPSTACK, 1.0)
+        _cache_cs["t"] = ahora
+    arriba = _cache_cs["v"]
+    ups = [u for u in uplinks if u["dev_eui"] == cfg["dev_eui"].lower()]
+    ultimo = ups[-1] if ups else None
+    if not arriba:
+        c("chirpstack", "ChirpStack recibe", "fallo", "la web de ChirpStack no contesta en %s (docker compose -p l10 ps)" % L10_CHIRPSTACK)
+    elif ultimo is None:
+        c("chirpstack", "ChirpStack recibe", "espera", "arriba, pero aún no ha publicado ningún ascendente del nodo")
+    else:
+        edad = ahora - ultimo["t"]
+        enviado = ult.get("fcnt")
+        if enviado is not None and ult.get("t") and ahora - ult["t"] > 10 and (ultimo["fcnt"] is None or ultimo["fcnt"] < enviado):
+            c("chirpstack", "ChirpStack recibe", "fallo", "el nodo envió fCnt %s hace %.0f s y ChirpStack solo llegó a %s (¿sesión perdida? mira «docker compose -p l10 logs chirpstack»)"
+                % (enviado, ahora - ult["t"], ultimo["fcnt"]))
+        else:
+            c("chirpstack", "ChirpStack recibe", "ok", "último ascendente fCnt %s hace %.0f s" % (ultimo["fcnt"], edad))
+    # 4 MQTT up
+    if ultimo is None:
+        c("mqtt", "MQTT application/…/event/up", "espera", "ningún evento en el broker del banco (192.168.1.50)")
+    elif not ultimo["decodificado"]:
+        c("mqtt", "MQTT application/…/event/up", "fallo", "llega pero sin `object`: el perfil no tiene el decodificador (L10.4)")
+    else:
+        c("mqtt", "MQTT application/…/event/up", "ok", "decodificado: temperatura %s, nivel %s" % (ultimo["temperatura"], ultimo["nivel"]))
+    # 5 planta/lorawan/temperatura
+    pl = mqtt_ultimo.get("planta/lorawan/temperatura")
+    if pl is None:
+        c("planta", "planta/lorawan/temperatura", "espera" if ultimo is None else "fallo",
+          "nadie la ha publicado" + ("" if ultimo is None else ": Node-RED no está llevando el ascendente (flujo sin cargar o mqtt in desconectado)"))
+    elif ultimo is not None and pl["t"] < ultimo["t"] - 2:
+        c("planta", "planta/lorawan/temperatura", "fallo", "el último valor (%s, %s) es anterior al ascendente: Node-RED dejó de publicar" % (pl["carga"][:12], pl["hora"]))
+    else:
+        c("planta", "planta/lorawan/temperatura", "ok", "%s a las %s" % (pl["carga"][:12], pl["hora"]))
+    return cad
+
+
+def estado_lora_demo():
+    cfg = l10_config()
+    cad = cadena_l10()
+    ai = ((((estado["pasarela"] or {}).get("equipos") or {}).get("t1.controllino")) or {}).get("ai") or [0, 0]
+    esp_t, esp_n = ai[0] * 1000 // 1023, ai[1] * 1000 // 1023
+    ups = [u for u in uplinks if u["dev_eui"] == cfg["dev_eui"].lower()][-10:]
+    ids = {}
+    try:
+        with open(os.path.join(RAIZ, "run", "l10_ids.json"), encoding="utf-8") as f:
+            ids = json.load(f)
+    except (OSError, ValueError):
+        pass
+    url_nr, quien_nr = nodered_url() if not lora_demo["corriendo"] else ("", "")
+    enlace_dev = "/#/tenants/%s/applications/%s/devices/%s" % (ids["tenant_id"], ids["app_id"], cfg["dev_eui"].lower()) \
+        if ids.get("tenant_id") and ids.get("app_id") else ""
+    demo = {k: lora_demo[k] for k in ("corriendo", "pasos", "error", "resumen", "modulos")}
+    if not demo["pasos"]:         # antes de la primera vez: los pasos que va a hacer, sin empezar
+        demo["pasos"] = [{"id": i, "nombre": n, "estado": "pend", "detalle": "", "seg": 0} for i, n in L10_PASOS]
+    return {"demo": demo,
+            "plan": l10_plan() if not lora_demo["corriendo"] else None,
+            "esperado": {"a0": ai[0], "a1": ai[1], "temperatura": esp_t / 10.0, "nivel": esp_n / 10.0,
+                         "alarma_temp": not 50 <= esp_t <= 300, "alarma_nivel": not 200 <= esp_n <= 900,
+                         "deveui": cfg["dev_eui"], "joineui": cfg["join_eui"], "canales": "8-15,65", "bytes": 9,
+                         "tema": "application/<app>/device/%s/event/up" % cfg["dev_eui"].lower(),
+                         "periodo_ms": cfg["periodo_ms"]},
+            "cadena": cad, "uplinks": list(reversed(ups)),
+            "enlaces": {"chirpstack": "http://{host}:8089/", "dispositivo": ("http://{host}:8089" + enlace_dev) if enlace_dev else "",
+                        "nodered": url_nr.replace("host.docker.internal", "{host}") if url_nr else "",
+                        "nodered_quien": quien_nr},
+            "pila": pilas.get("L10")}
 
 
 class _Banco(verificador.Contexto):
@@ -836,6 +1484,16 @@ class _Banco(verificador.Contexto):
 
 
 def _verificar(pid: str):
+    try:
+        _verificar_(pid)
+    except Exception as e:                     # sin esto «corriendo» quedaba en True para siempre
+        verif["informe"] = None
+        verif["pasos"] = [{"txt": "El autocorrector fallo", "ok": False, "motivo": "%s: %s" % (type(e).__name__, e)}]
+    finally:
+        verif.update({"corriendo": False, "fin": time.time(), "actual": -1})
+
+
+def _verificar_(pid: str):
     p = leer_practica(pid)
     verif.update({"corriendo": True, "practica": pid, "pasos": [], "actual": 0, "fin": None, "informe": None})
     banco = _Banco()
@@ -874,7 +1532,9 @@ def _verificar(pid: str):
 
 def informe_html(inf: dict) -> str:
     filas = "".join("<tr><td>%s</td><td>%s</td><td>%s</td></tr>" % (
-        "✔" if x["ok"] else ("✘" if x["ok"] is False else "·"), x["txt"], x.get("motivo", "")) for x in inf["pasos"])
+        "✔" if x["ok"] else ("✘" if x["ok"] is False else "·"), html.escape(str(x["txt"])),
+        html.escape(str(x.get("motivo", "")))) for x in inf["pasos"])
+    inf = {k: (html.escape(str(v)) if isinstance(v, str) else v) for k, v in inf.items()}
     return ("<!doctype html><meta charset=utf-8><title>Informe %(practica)s</title>"
             "<style>body{font:15px system-ui;max-width:800px;margin:30px auto}td,th{border-bottom:1px solid #ccc;padding:6px;text-align:left}"
             "</style><h1>%(practica)s · %(titulo)s</h1><p>Equipo: %(equipo)s · Comprobado: %(hora)s<br>"
@@ -893,7 +1553,10 @@ def capturar(red: str, seg: int):
     va por argumento (-c): el demonio de Docker no ve las rutas de este contenedor."""
     if red not in ("tab-lan", "tab-wifi", "tab-485"):
         return None
-    seg = max(3, min(int(seg), 120))
+    try:
+        seg = max(3, min(int(seg), 120))
+    except (TypeError, ValueError):
+        seg = 30
     with open(os.path.join(RAIZ, "herramientas", "sniffer.py"), encoding="utf-8") as f:
         codigo = f.read()
     with _cap_cerrojo:
@@ -916,6 +1579,9 @@ def leer_s7():
 
 
 # ── HTTP ────────────────────────────────────────────────────────────────────
+MAX_CUERPO = 4 * 1024 * 1024          # un .ino / .st / proyecto HMI de alumno pesa kB
+
+
 class Atender(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -924,7 +1590,7 @@ class Atender(BaseHTTPRequestHandler):
         """¿Esta peticion viene de un navegador en modo docente? (cookie del portal)"""
         for parte in (self.headers.get("Cookie") or "").split(";"):
             k, _, v = parte.strip().partition("=")
-            if k == "docente" and v in _tokens_docente:
+            if k == "docente" and _ficha_valida(v):
                 return True
         return False
 
@@ -945,12 +1611,48 @@ class Atender(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
+    def _cross_site(self) -> bool:
+        """Peticion lanzada por otra web desde el navegador del alumno/docente (CSRF)? Los
+        navegadores mandan Origin / Sec-Fetch-Site; curl y Python no, y esos pasan."""
+        if (self.headers.get("Sec-Fetch-Site") or "same-origin") == "cross-site":
+            return True
+        o = self.headers.get("Origin")
+        if o is None:
+            return False
+        return urlparse(o).netloc != (self.headers.get("Host") or "")
+
+    def _seguro(self, f):
+        try:
+            if self._cross_site():
+                return self._json({"ok": False, "salida": "Peticion de otro origen rechazada"}, 403)
+            return f()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except Exception as e:                  # JSON roto, int() de un parametro...: 400/500 limpio, sin traza
+            try:
+                malo = isinstance(e, (ValueError, TypeError, KeyError, IndexError, AttributeError))
+                self._json({"ok": False, "salida": "Peticion no valida" if malo else "Error interno"},
+                           400 if malo else 500)
+            except OSError:
+                pass
+            print("panel: %s %s -> %s: %s" % (self.command, self.path.split("?")[0], type(e).__name__, e),
+                  file=sys.stderr, flush=True)
+
     def do_GET(self):
+        self._seguro(self._get)
+
+    def do_POST(self):
+        self._seguro(self._post)
+
+    def _get(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
         if u.path in ("/", "/index.html"):
             with open(os.path.join(AQUI, "index.html"), "rb") as f:
                 return self._texto(f.read(), "text/html; charset=utf-8")
+        if u.path == "/deet.css":                       # linea grafica DEET compartida por las paginas del portal
+            with open(os.path.join(AQUI, "deet.css"), "rb") as f:
+                return self._texto(f.read(), "text/css; charset=utf-8")
         if u.path in ("/lab", "/lab.html"):
             with open(os.path.join(AQUI, "lab.html"), "rb") as f:
                 return self._texto(f.read(), "text/html; charset=utf-8")
@@ -1025,9 +1727,15 @@ class Atender(BaseHTTPRequestHandler):
                 p.pop("solucion_cables", None)
                 p.pop("solucion_archivos", None)
                 p.pop("solucion_equipos", None)
+                p.pop("demo_lora", None)
             return self._json(p)
         if u.path == "/api/docente":
             return self._json({"disponible": docente_disponible(), "activo": self._docente()})
+        if u.path == "/api/lora_demo":
+            # Estado de la demostracion L10 + «Asi debe salir» (cadena, ascendentes). Solo docente.
+            if not self._docente():
+                return self._json({"ok": False, "salida": "Solo el docente"}, 403)
+            return self._json(estado_lora_demo())
         if u.path == "/api/espacio":
             d = {"paquetes": paquetes_imagenes()}
             if q.get("completo"):
@@ -1055,10 +1763,18 @@ class Atender(BaseHTTPRequestHandler):
                 return self._texto(f.read(), "text/markdown; charset=utf-8")
         return self._texto("no existe", code=404)
 
-    def do_POST(self):
+    def _post(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
-        n = int(self.headers.get("Content-Length", 0))
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            n = -1
+        if n < 0:
+            return self._json({"ok": False, "salida": "Content-Length no valido"}, 400)
+        if n > MAX_CUERPO:
+            self.close_connection = True
+            return self._json({"ok": False, "salida": "Cuerpo demasiado grande (maximo %d MB)" % (MAX_CUERPO >> 20)}, 413)
         cuerpo = self.rfile.read(n) if n else b""
         if u.path == "/api/lora_config":
             # FSB y servidor de red de la pasarela LoRaWAN (lo lee tab-lora cada segundo)
@@ -1090,15 +1806,22 @@ class Atender(BaseHTTPRequestHandler):
                 clave = str(json.loads(cuerpo or b"{}").get("clave", ""))
             except ValueError:
                 clave = ""
-            if not docente_disponible() or not clave_valida(clave):
-                time.sleep(1.0)               # sin prisa para probar claves
+            with _cerrojo_intentos:               # un intento por segundo en total, aunque lleguen en paralelo
+                bien = docente_disponible() and clave_valida(clave)
+                if not bien:
+                    time.sleep(1.0)           # sin prisa para probar claves
+            if not bien:
                 return self._json({"ok": False, "salida": "Clave incorrecta"}, 403)
             token = secrets.token_urlsafe(24)
-            _tokens_docente.add(token)
+            ahora = time.time()
+            for h in [h for h, v in list(_tokens_docente.items()) if v["hasta"] < ahora]:
+                _tokens_docente.pop(h, None)
+            _tokens_docente[_huella(token)] = {"desde": ahora, "hasta": ahora + SESION_DOCENTE_S}
+            _guardar_sesiones()
             b = json.dumps({"ok": True}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Set-Cookie", "docente=%s; Path=/; HttpOnly; SameSite=Strict" % token)
+            self.send_header("Set-Cookie", "docente=%s; Path=/; HttpOnly; SameSite=Strict; Max-Age=%d" % (token, SESION_DOCENTE_S))
             self.send_header("Content-Length", str(len(b)))
             self.end_headers()
             self.wfile.write(b)
@@ -1107,7 +1830,8 @@ class Atender(BaseHTTPRequestHandler):
             for parte in (self.headers.get("Cookie") or "").split(";"):
                 k, _, v = parte.strip().partition("=")
                 if k == "docente":
-                    _tokens_docente.discard(v)
+                    _tokens_docente.pop(_huella(v), None)
+            _guardar_sesiones()
             return self._json({"ok": True})
         if u.path == "/api/subir_ejemplo":
             nombre_ej = q.get("ejemplo", [""])[0]
@@ -1196,15 +1920,16 @@ class Atender(BaseHTTPRequestHandler):
             p = leer_practica(q.get("id", [""])[0])
             if p is None or not p.get("solucion_cables"):
                 return self._json({"ok": False, "salida": "Esta práctica no tiene cableado de solución"}, 404)
-            modulos, n = [], 0
-            for i, par in enumerate(p["solucion_cables"]):
-                if re.search(r"\.(pot|dht11|boton\d|motor|foco|led|mm)\.", "%s %s" % (par[0], par[1])):
-                    modulos.append(par)
-                    continue
-                a_pasarela({"t": "cable", "id": "sol%s_%d" % (p["id"], i), "a": par[0], "b": par[1]})
-                n += 1
+            modulos, n = cablear_solucion(p)
             return self._json({"ok": True, "modulos": modulos,
                                "salida": "Cableado de la solución: %d cables de red y %d de módulos" % (n, len(modulos))})
+        if u.path == "/api/lora_demo":
+            # MONTAR SOLUCION COMPLETA (L10): arranca los pasos en segundo plano; el avance se lee con GET.
+            # ?desde=<paso> = «Reintentar desde aqui». Solo docente.
+            if not self._docente():
+                return self._json({"ok": False, "salida": "Solo el docente"}, 403)
+            ok, txt = lanzar_lora_demo(q.get("desde", [""])[0])
+            return self._json({"ok": ok, "salida": txt}, 200 if ok else 409)
         if u.path == "/api/mes_demo":
             # Demostracion L11 (docente): crea una orden en Odoo y la pasa al MES. Lo hace el panel porque
             # el navegador, con el portal por HTTPS, no puede llamar al MES por HTTP (contenido mixto).
@@ -1225,10 +1950,12 @@ class Atender(BaseHTTPRequestHandler):
             return self._json({"ok": ok, "salida": txt})
         if u.path == "/api/verificar":
             pid = q.get("id", [""])[0]
-            if verif["corriendo"]:
-                return self._json({"ok": False, "salida": "Ya hay una comprobación en curso"}, 409)
             if leer_practica(pid) is None:
                 return self._json({"ok": False, "salida": "Práctica sin criterios de comprobación"}, 404)
+            with _cerrojo_verif:
+                if verif["corriendo"]:
+                    return self._json({"ok": False, "salida": "Ya hay una comprobación en curso"}, 409)
+                verif["corriendo"] = True
             threading.Thread(target=_verificar, args=(pid,), daemon=True).start()
             return self._json({"ok": True})
         if u.path == "/api/preparar":
@@ -1252,6 +1979,7 @@ class Atender(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    _cargar_sesiones()
     threading.Thread(target=hilo_pasarela, daemon=True).start()
     threading.Thread(target=hilo_mqtt, daemon=True).start()
     threading.Thread(target=hilo_auto, daemon=True).start()

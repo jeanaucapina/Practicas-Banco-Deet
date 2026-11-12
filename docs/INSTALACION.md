@@ -95,4 +95,4 @@ Si tienes instalado **ot-lab**, el entorno de los talleres (github.com/Pbarbecho
 - **«Pool overlaps with other one on this address space»** (L4): ot-lab está corriendo. Ver arriba.
 - **«port is already allocated»**: otro programa usa ese puerto (ver la tabla). En Windows, `netstat -ano | findstr :<puerto>` dice cuál.
 - **El 3D no se actualiza tras una actualización del banco**: Ctrl+Shift+R en el navegador.
-- **Docker ocupa mucho disco**: usa «Espacio en disco» del portal (arriba). `docker system prune` también borra lo que no se usa y no toca el banco, pero no devuelve el espacio a C: sin `.\lab.ps1 compactar`.
+- **Docker ocupa mucho disco**: usa «Espacio en disco» del portal (arriba). **No uses `docker system prune` con el banco parado**: borra sus contenedores detenidos (se recrean al arrancar) y, con `-a`, también sus imágenes (hay que reconstruirlas: unos 20 min con internet). Tampoco devuelve el espacio a C: sin `.\lab.ps1 compactar`.

@@ -55,8 +55,8 @@ class ClienteMQTT:
         if connack[0] != 0x20 or connack[3] != 0:
             self.cerrar()
             return False
-        asyncio.ensure_future(self._leer())
-        asyncio.ensure_future(self._ping())
+        asyncio.ensure_future(self._leer(self.lector, self.escritor))
+        asyncio.ensure_future(self._ping(self.escritor))
         return True
 
     def cerrar(self):
@@ -78,29 +78,40 @@ class ClienteMQTT:
         cuerpo = struct.pack(">H", self._pid) + _cadena(filtro) + b"\x00"
         self.escritor.write(bytes([0x82]) + _varint(len(cuerpo)) + cuerpo)
 
-    async def _ping(self):
-        while self.conectado:
+    async def _ping(self, escritor):
+        # Atado a SU conexion: tras una reconexion el ping viejo no debe seguir (ni duplicarse).
+        while escritor is self.escritor and not escritor.is_closing():
             await asyncio.sleep(self.keepalive / 2)
-            if self.conectado:
-                self.escritor.write(b"\xc0\x00")
+            if escritor is self.escritor and not escritor.is_closing():
+                escritor.write(b"\xc0\x00")
 
-    async def _leer(self):
+    async def _leer(self, lector, escritor):
+        # Usa el lector de SU conexion (self.lector cambia al reconectar y dos lectores
+        # sobre el mismo flujo se robarian bytes).
         try:
             while True:
-                cab = await self.lector.readexactly(1)
+                cab = await lector.readexactly(1)
                 largo, mult = 0, 1
-                while True:
-                    b = (await self.lector.readexactly(1))[0]
+                for _ in range(4):               # el varint de MQTT tiene 4 bytes como maximo
+                    b = (await lector.readexactly(1))[0]
                     largo += (b & 0x7F) * mult
                     mult *= 128
                     if not b & 0x80:
                         break
-                cuerpo = await self.lector.readexactly(largo)
-                if cab[0] >> 4 == 3:
+                else:
+                    break                        # longitud mal formada: se cierra
+                cuerpo = await lector.readexactly(largo)
+                if cab[0] >> 4 == 3 and len(cuerpo) >= 2:
                     n = struct.unpack(">H", cuerpo[:2])[0]
                     tema = cuerpo[2:2 + n].decode(errors="replace")
                     off = 2 + n + (2 if cab[0] & 0x06 else 0)
-                    self.al_mensaje(tema, cuerpo[off:])
+                    try:
+                        self.al_mensaje(tema, cuerpo[off:])
+                    except Exception as e:       # un fallo del llamador no debe dejar la conexion sin lector
+                        print("mqtt_mini: al_mensaje fallo:", repr(e), flush=True)
         except (asyncio.IncompleteReadError, OSError):
             pass
-        self.cerrar()
+        if escritor is self.escritor:
+            self.cerrar()
+        else:
+            escritor.close()

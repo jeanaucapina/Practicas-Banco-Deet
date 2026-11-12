@@ -28,13 +28,17 @@ Laboratorio VR en Windows: todo lo que corre en Docker, en un solo sitio.
   .\lab.ps1 scada [parar]    FUXA, SCADA/HMI web (alternativa al Node-RED de la L9):
                          http://localhost:1891, conectado al banco por Modbus TCP y MQTT
   .\lab.ps1 scada quitar    como parar, y suelta la imagen de FUXA (2,3 GB) hasta la proxima vez
+  .\lab.ps1 multitanque [parar]   gemelo OPC UA del multitanque en Docker (multitanque_opcua/,
+                         proyecto "multitanque"): opc.tcp://localhost:44840, nodos por nombre; con gafas
+                         por USB hace adb reverse tcp:44840 (en el visor: «Gemelo Docker (PC)»)
   .\lab.ps1 compactar   (administrador) devuelve a C: el espacio de las imagenes que sueltas:
                          el disco virtual de Docker Desktop no se encoge solo
   .\lab.ps1 parar       apaga y BORRA los contenedores (no quedan consumiendo)
   .\lab.ps1 estado      que esta corriendo y cuanta memoria/CPU gasta
   .\lab.ps1 logs        registro de la pasarela en vivo (Ctrl+C para salir)
   .\lab.ps1 apk [preset] compila e instala el APK en las gafas por USB
-                         presets: "Quest Win" (KukaLab, por defecto) | "Quest Tablero Win"
+                         presets: "Quest Win" (KukaLab, por defecto) | "Quest Tablero Win" |
+                         "Quest Comunicaciones Win" (laboratorio De Lorenzo de AM)
                          Los Win llevan otro identificador (.win): las apps firmadas en el
                          PC Linux no se pueden actualizar desde aqui y conviven con estas.
 
@@ -457,6 +461,26 @@ switch ($accion) {
         Write-Host "  FUXA (SCADA/HMI web, alternativa al tablero de Node-RED de la L9): http://localhost:1891" -ForegroundColor Green
         Write-Host "  Conectores ya cableados al banco: Modbus TCP 192.168.1.10:502 (ESP32 PLC) y MQTT 192.168.1.50:1883 (broker)."
         Write-Host "  Guia: tablero\practicas\L9\enunciado.md (Parte B, FUXA).  Para pararlo: .\lab.ps1 scada parar" -ForegroundColor Cyan
+    }
+    "multitanque" {
+        Docker-Listo
+        $mt = @("compose", "-f", "$raiz\multitanque_opcua\docker-compose.yml")
+        if ($preset -eq "parar") {
+            docker @mt down | Out-Null
+            if (Gafas) { adb reverse --remove tcp:44840 2>$null | Out-Null }
+            Write-Host "Gemelo OPC UA del multitanque parado." -ForegroundColor Green
+            break
+        }
+        docker @mt up -d --build
+        Write-Host ""
+        Write-Host "  Gemelo OPC UA del multitanque: opc.tcp://localhost:44840 (ns=1, nodos por nombre, seguridad None)" -ForegroundColor Green
+        if (Gafas) {
+            adb reverse tcp:44840 tcp:44840 | Out-Null
+            Write-Host "  Gafas por USB: adb reverse tcp:44840 hecho. En el visor, panel MULTITANQUES > «Gemelo Docker (PC)» (127.0.0.1:44840) > Conectar." -ForegroundColor Green
+        } else {
+            Write-Host "  Sin gafas por USB. En el visor usa la IP de este PC con el puerto 44840 (hay que abrirlo en el firewall)." -ForegroundColor Yellow
+        }
+        Write-Host "  Para pararlo: .\lab.ps1 multitanque parar" -ForegroundColor Cyan
     }
     "compactar" {
         # Docker Desktop NO devuelve a C: el espacio de las imagenes que sueltas: su disco virtual

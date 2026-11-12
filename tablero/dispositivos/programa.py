@@ -275,11 +275,16 @@ class Programa(Equipo):
             if not linea:
                 return
             txt = linea.decode("utf-8", "replace").rstrip("\r\n")
-            (self._del_programa if que == "pines" else self._serie)(txt)
+            try:
+                (self._del_programa if que == "pines" else self._serie)(txt)
+            except (ValueError, IndexError, OSError) as e:      # una linea mala del programa no debe parar la lectura de pines
+                self.anotar("linea del programa ignorada (%s): %r" % (type(e).__name__, txt[:60]))
 
     async def _correr(self):
         loop = asyncio.get_running_loop()
         while True:
+            if getattr(self, "proc", None) is not None and self.proc.returncode is None:
+                self.proc.kill()                # el vigilante relanzo esta tarea tras un fallo: no dejar dos programas vivos
             r_out, w_out = os.pipe()            # programa -> aqui
             r_in, w_in = os.pipe()              # aqui -> programa
             fcntl.fcntl(w_in, fcntl.F_SETFL, fcntl.fcntl(w_in, fcntl.F_GETFL) | os.O_NONBLOCK)
@@ -318,10 +323,10 @@ class Programa(Equipo):
             s.bind(("0.0.0.0", HMI_PUERTO_PROPIO))
             self._udp_hmi = s
             asyncio.get_running_loop().add_reader(s.fileno(), self._de_hmi)
-            asyncio.ensure_future(self._bucle_epc())
+            self.lanzar(self._bucle_epc)
         if self.lora is not None:
             await self.lora.iniciar()
-        asyncio.ensure_future(self._correr())
+        self.lanzar(self._correr)
 
     # ── EPC: motor DC con encoder de 36 pulsos/rev en el puerto X1 (guia L2) ───
     EPC_D0, EPC_IN1 = 100, 184          # D0 de X1 (PWM de mando) e IN1 de X1 (pulsos)

@@ -7,7 +7,7 @@
 <style>
   :root {
     --fondo: #f3f4f1; --tarjeta: #fdfdfb; --borde: #dcdfd8; --texto: #1c2321; --suave: #5b6560;
-    --acento: #1f7f74; --acento-f: #d6efe9; --naranja: #c2571a; --rojo: #b3261e; --verde: #2e9d4f; --azul: #2f62b0;
+    --acento: #1a6f65; --acento-f: #d6efe9; --naranja: #a64a14; --rojo: #b3261e; --verde: #2e9d4f; --azul: #2f62b0;
     --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
     --pantalla: #f4f6f8; --w-texto: #1d2733;
   }
@@ -22,12 +22,13 @@
   button, select, input { font: inherit; font-size: 13px; }
   button { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
   button:hover { border-color: var(--acento); }
+  :focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
   button.prim { background: var(--acento); color: var(--tarjeta); border-color: var(--acento); font-weight: 600; }
   button.activo { background: var(--azul); color: #fff; border-color: var(--azul); }
   input, select { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); border-radius: 6px; padding: 4px 6px; width: 100%; }
   input[type=checkbox] { width: auto; }
   main { display: grid; grid-template-columns: 160px minmax(0, 1fr) 260px; gap: 12px; padding: 12px; align-items: start; }
-  @media (max-width: 1200px) { main { grid-template-columns: 1fr; } }
+  @media (max-width: 1200px) { main { grid-template-columns: minmax(0, 1fr); } }
   .caja { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 12px; }
   .caja h2 { font-size: 13px; margin: 0 0 8px; color: var(--suave); text-transform: uppercase; letter-spacing: .04em; }
   .paleta button { display: block; width: 100%; text-align: left; margin-bottom: 6px; font-family: var(--mono); font-size: 12.5px; }
@@ -67,24 +68,26 @@
   td, th { border-bottom: 1px solid var(--borde); padding: 3px 6px; text-align: left; font-family: var(--mono); }
   pre { background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 8px; font: 12px/1.4 var(--mono); overflow: auto; max-height: 260px; margin: 6px 0 0; white-space: pre-wrap; word-break: break-all; }
   .inferior { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 12px 16px; }
-  @media (max-width: 1200px) { .inferior { grid-template-columns: 1fr; } }
+  @media (max-width: 1200px) { .inferior { grid-template-columns: minmax(0, 1fr); } }
   .nota { color: var(--suave); font-size: 12.5px; }
+  code { overflow-wrap: anywhere; }
   .tx { color: var(--azul); } .rx { color: var(--verde); }
   #estado-hmi { font-size: 12.5px; color: var(--suave); }
   .oculto { display: none !important; }
 </style>
+<link rel="stylesheet" href="/deet.css">
 </head>
 <body>
 <header>
   <h1>STONE Designer <span style="font-weight:400;color:var(--suave)">· STWC050WT-01, 5" 800×480, RS-232 115 200</span></h1>
-  <input id="nombre" style="width:200px" placeholder="Nombre del proyecto">
+  <input id="nombre" style="width:200px;max-width:100%" placeholder="Nombre del proyecto" aria-label="Nombre del proyecto">
   <button onclick="nuevo()">Nuevo</button>
   <button onclick="cargarEjemplo()">Ejemplo L2</button>
   <button onclick="document.getElementById('abrir').click()">Abrir…</button>
-  <input type="file" id="abrir" accept=".json" class="oculto">
+  <input type="file" id="abrir" aria-label="Abrir proyecto .json" accept=".json" class="oculto">
   <button onclick="guardar()">Guardar .json</button>
   <span style="flex:1"></span>
-  <select id="n" style="width:auto"><option value="1">HMI del tablero 1</option><option value="2">HMI del tablero 2</option></select>
+  <select id="n" style="width:auto" aria-label="HMI de destino"><option value="1">HMI del tablero 1</option><option value="2">HMI del tablero 2</option></select>
   <button class="prim" onclick="cargarEnHMI()" title="Como «download» de STONE Designer con el USB A–A">Descargar a la HMI</button>
   <button id="b-modo" onclick="alternarModo()">▶ Probar</button>
   <span id="estado-hmi"></span>
@@ -103,7 +106,7 @@
     <button onclick="anadir('chart_view')">chart_view</button>
     <h2 style="margin-top:12px">Páginas</h2>
     <div class="paginas" id="paginas"></div>
-    <label class="nota">Nombre de la página</label><input id="pg-nombre">
+    <label class="nota" for="pg-nombre">Nombre de la página</label><input id="pg-nombre">
     <button style="margin-top:6px" onclick="nuevaPagina()">+ Página</button>
     <button style="margin-top:6px" onclick="quitarPagina()">– Quitar esta</button>
   </aside>
@@ -117,19 +120,19 @@
     <h2>Propiedades</h2>
     <div id="props-vacio" class="nota">Elige un widget.</div>
     <div id="props-form" class="oculto">
-      <label>Tipo</label><input id="p-tipo" disabled>
-      <label>Nombre (widget)</label><input id="p-nombre">
-      <div id="g-texto"><label>Texto</label><input id="p-texto"></div>
-      <div id="g-fuente"><label>Tamaño de fuente</label><input id="p-fuente" type="number" min="8" max="80"></div>
-      <div class="fila3" id="g-rango"><div><label>Mín.</label><input id="p-min" type="number"></div>
-        <div><label>Máx.</label><input id="p-max" type="number"></div><div><label>Paso</label><input id="p-paso" type="number"></div></div>
+      <label for="p-tipo">Tipo</label><input id="p-tipo" disabled>
+      <label for="p-nombre">Nombre (widget)</label><input id="p-nombre">
+      <div id="g-texto"><label for="p-texto">Texto</label><input id="p-texto"></div>
+      <div id="g-fuente"><label for="p-fuente">Tamaño de fuente</label><input id="p-fuente" type="number" min="8" max="80"></div>
+      <div class="fila3" id="g-rango"><div><label for="p-min">Mín.</label><input id="p-min" type="number"></div>
+        <div><label for="p-max">Máx.</label><input id="p-max" type="number"></div><div><label for="p-paso">Paso</label><input id="p-paso" type="number"></div></div>
       <div id="g-vertical"><label><input id="p-vertical" type="checkbox"> Vertical</label></div>
-      <div id="g-dest"><label>Al pulsar, abrir la página</label><input id="p-dest" placeholder="(ninguna)"></div>
-      <div id="g-series"><label>Series (nombre:color:mín:máx, una por línea)</label>
+      <div id="g-dest"><label for="p-dest">Al pulsar, abrir la página</label><input id="p-dest" placeholder="(ninguna)"></div>
+      <div id="g-series"><label for="p-series">Series (nombre:color:mín:máx, una por línea)</label>
         <textarea id="p-series" rows="3" style="width:100%;font:12px var(--mono)"></textarea>
-        <label>capacity (puntos)</label><input id="p-capacidad" type="number"></div>
-      <div class="fila2"><div><label>X</label><input id="p-x" type="number"></div><div><label>Y</label><input id="p-y" type="number"></div>
-        <div><label>Ancho</label><input id="p-w" type="number"></div><div><label>Alto</label><input id="p-h" type="number"></div></div>
+        <label for="p-capacidad">capacity (puntos)</label><input id="p-capacidad" type="number"></div>
+      <div class="fila2"><div><label for="p-x">X</label><input id="p-x" type="number"></div><div><label for="p-y">Y</label><input id="p-y" type="number"></div>
+        <div><label for="p-w">Ancho</label><input id="p-w" type="number"></div><div><label for="p-h">Alto</label><input id="p-h" type="number"></div></div>
       <button style="margin-top:10px;color:var(--rojo)" onclick="borrar()">Eliminar widget</button>
     </div>
   </aside>
